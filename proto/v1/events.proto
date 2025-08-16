@@ -1,0 +1,17 @@
+syntax = "proto3";
+package pingerus.v1;
+
+option go_package = "github.com/NordCoder/Pingerus/generated;generated";
+
+import "google/protobuf/timestamp.proto";
+
+message CheckRequest {
+  int32 check_id = 1;
+}
+
+message StatusChange {
+  int32                     check_id   = 1;
+  bool                      old_status = 2;
+  bool                      new_status = 3;
+  google.protobuf.Timestamp ts         = 4;
+}
