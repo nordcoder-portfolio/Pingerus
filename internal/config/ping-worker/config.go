@@ -20,7 +20,6 @@ type KafkaOut struct {
 type HTTPPing struct {
 	Timeout         time.Duration `mapstructure:"timeout"`
 	UserAgent       string        `mapstructure:"user_agent"`
-	MaxRedirects    int           `mapstructure:"max_redirects"`
 	FollowRedirects bool          `mapstructure:"follow_redirects"`
 	VerifyTLS       bool          `mapstructure:"verify_tls"`
 }

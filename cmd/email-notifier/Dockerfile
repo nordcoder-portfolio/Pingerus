@@ -12,6 +12,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 FROM gcr.io/distroless/base-debian12 AS final
 
 COPY --from=builder /bin/email-notifier /bin/email-notifier
+COPY --from=builder /app/internal/config/*.yaml /config
 
 EXPOSE 8084
 

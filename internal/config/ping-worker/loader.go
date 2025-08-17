@@ -30,7 +30,6 @@ func Load(path string) (*Config, error) {
 
 	v.SetDefault("http.timeout", "5s")
 	v.SetDefault("http.user_agent", "Pingerus/1.0")
-	v.SetDefault("http.max_redirects", 10)
 	v.SetDefault("http.follow_redirects", true)
 	v.SetDefault("http.verify_tls", true)
 

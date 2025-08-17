@@ -45,6 +45,14 @@ else
   echo "✔ googleapis already present"
 fi
 
+PGV_DIR="third_party/protoc-gen-validate"
+if [ ! -d "${PGV_DIR}" ]; then
+  echo "▶ Cloning protoc-gen-validate into ${PGV_DIR}…"
+  git clone --depth=1 https://github.com/bufbuild/protoc-gen-validate.git "${PGV_DIR}"
+else
+  echo "✔ protoc-gen-validate (protos) already present"
+fi
+
 echo "──────────────────────────────────────────────────────────"
 echo "✔ protoc version: $(protoc --version)"
 echo "✔ installed plugins:"

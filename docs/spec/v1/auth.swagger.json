@@ -189,8 +189,7 @@
       "type": "object",
       "properties": {
         "accessToken": {
-          "type": "string",
-          "title": "JWT (HS256)"
+          "type": "string"
         },
         "user": {
           "$ref": "#/definitions/v1User"

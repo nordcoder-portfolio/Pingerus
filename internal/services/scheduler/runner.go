@@ -2,9 +2,7 @@ package scheduler
 
 import (
 	"context"
-	scheduler2 "github.com/NordCoder/Pingerus/internal/config/scheduler"
-	"github.com/NordCoder/Pingerus/internal/domain/check"
-	"github.com/NordCoder/Pingerus/internal/repository/kafka"
+	config "github.com/NordCoder/Pingerus/internal/config/scheduler"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -13,10 +11,9 @@ import (
 )
 
 type Runner struct {
-	log  *zap.Logger
-	repo check.Repo
-	pub  *kafka.CheckEventsKafka
-	cfg  scheduler2.SchedCfg
+	Log *zap.Logger
+	UC  *Usecase
+	Cfg *config.SchedCfg
 
 	mFetched prometheus.Counter
 	mSent    prometheus.Counter
@@ -24,12 +21,11 @@ type Runner struct {
 	mLoopDur prometheus.Histogram
 }
 
-func NewRunner(log *zap.Logger, repo check.Repo, pub *kafka.CheckEventsKafka, cfg scheduler2.SchedCfg) *Runner {
+func New(log *zap.Logger, uc *Usecase, cfg *config.SchedCfg) *Runner {
 	return &Runner{
-		log:  log,
-		repo: repo,
-		pub:  pub,
-		cfg:  cfg,
+		Log: log,
+		UC:  uc,
+		Cfg: cfg,
 		mFetched: promauto.NewCounter(prometheus.CounterOpts{
 			Name: "scheduler_checks_fetched_total", Help: "Due checks fetched from DB",
 		}),
@@ -47,7 +43,7 @@ func NewRunner(log *zap.Logger, repo check.Repo, pub *kafka.CheckEventsKafka, cf
 }
 
 func (r *Runner) Run(ctx context.Context) error {
-	ticker := time.NewTicker(r.cfg.Tick)
+	ticker := time.NewTicker(r.Cfg.Tick)
 	defer ticker.Stop()
 
 	for {
@@ -56,36 +52,20 @@ func (r *Runner) Run(ctx context.Context) error {
 			return ctx.Err()
 		case <-ticker.C:
 			start := time.Now()
-			r.tick(ctx)
+			fetched, sent, errs, err := r.UC.Tick(ctx, r.Cfg.BatchLimit)
+			if err != nil {
+				r.mErr.Inc()
+				r.Log.Warn("tick error", zap.Error(err))
+			}
+			if fetched > 0 {
+				r.mFetched.Add(float64(fetched))
+				r.mSent.Add(float64(sent))
+				if errs > 0 {
+					r.mErr.Add(float64(errs))
+				}
+				r.Log.Debug("scheduled batch", zap.Int("fetched", fetched), zap.Int("sent", sent), zap.Int("errors", errs))
+			}
 			r.mLoopDur.Observe(time.Since(start).Seconds())
 		}
 	}
-}
-
-func (r *Runner) tick(ctx context.Context) {
-	limit := r.cfg.BatchLimit
-	if limit <= 0 {
-		limit = 100
-	}
-
-	due, err := r.repo.FetchDue(limit)
-	if err != nil {
-		r.mErr.Inc()
-		r.log.Warn("fetch due failed", zap.Error(err))
-		return
-	}
-	if len(due) == 0 {
-		return
-	}
-	r.mFetched.Add(float64(len(due)))
-
-	for _, c := range due {
-		if err := r.pub.PublishCheckRequested(ctx, c.ID); err != nil {
-			r.mErr.Inc()
-			r.log.Warn("publish failed", zap.Int64("check_id", c.ID), zap.Error(err))
-			continue
-		}
-		r.mSent.Inc()
-	}
-	r.log.Debug("scheduled batch", zap.Int("count", len(due)))
 }

@@ -1,0 +1,28 @@
+db:
+  dsn: "postgres://user:password@db-host:5432/pingerus?sslmode=disable"
+  max_conns: 10
+  min_conns: 1
+  max_conn_lifetime: 1h
+  max_conn_idle_time: 30m
+  health_check_period: 1m
+  query_timeout: 5s
+
+kafka_in:
+  brokers: ["kafka:9092"]
+  topic: "check-request"
+  group_id: "ping-worker"
+
+kafka_out:
+  brokers: ["kafka:9092"]
+  topic: "status-change"
+
+http:
+  timeout: 5s
+  user_agent: "PingerusBot/1.0"
+  follow_redirects: true
+  verify_tls: true
+
+server:
+  metrics_addr: ":8083"
+
+log_level: "info"

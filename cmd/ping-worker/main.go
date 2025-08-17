@@ -3,22 +3,28 @@ package main
 import (
 	"context"
 	"errors"
-	config "github.com/NordCoder/Pingerus/internal/config/ping-worker"
-	"github.com/NordCoder/Pingerus/internal/obs"
-	"github.com/NordCoder/Pingerus/internal/repository/kafka"
-	pg "github.com/NordCoder/Pingerus/internal/repository/postgres"
-	service "github.com/NordCoder/Pingerus/internal/services/ping-worker"
+	pingworker "github.com/NordCoder/Pingerus/internal/services/ping-worker"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	config "github.com/NordCoder/Pingerus/internal/config/ping-worker"
+	"github.com/NordCoder/Pingerus/internal/obs"
+	"github.com/NordCoder/Pingerus/internal/repository/kafka"
+	pg "github.com/NordCoder/Pingerus/internal/repository/postgres"
+	workerrepo "github.com/NordCoder/Pingerus/internal/services/ping-worker/repo"
+
 	"go.uber.org/zap"
 )
 
+type systemClock struct{}
+
+func (systemClock) Now() time.Time { return time.Now().UTC() }
+
 func main() {
-	cfg, err := config.Load("config/ping-worker.yaml")
+	cfg, err := config.Load("../config/ping-worker.yaml")
 	if err != nil {
 		panic(err)
 	}
@@ -31,9 +37,9 @@ func main() {
 	defer log.Sync()
 	log = log.With(zap.String("service", "ping-worker"))
 
-	ctx := context.Background()
+	root := context.Background()
 
-	db, err := pg.NewDB(ctx, cfg.DB)
+	db, err := pg.NewDB(root, cfg.DB)
 	if err != nil {
 		log.Fatal("db connect", zap.Error(err))
 	}
@@ -48,9 +54,14 @@ func main() {
 	prod := kafka.NewProducer(cfg.Out.Brokers, cfg.Out.Topic)
 	defer prod.Close()
 
-	pub := kafka.NewCheckEventsKafka(prod)
+	events := kafka.NewCheckEventsKafka(prod)
 
-	httpc := service.NewHTTPClient(cfg.HTTP)
+	httpc := pingworker.New(config.HTTPPing{
+		Timeout:         cfg.HTTP.Timeout,
+		UserAgent:       cfg.HTTP.UserAgent,
+		FollowRedirects: cfg.HTTP.FollowRedirects,
+		VerifyTLS:       cfg.HTTP.VerifyTLS,
+	})
 
 	ms := obs.CreateMetricsServer(cfg.Server.MetricsAddr, func(ctx context.Context) error {
 		hctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
@@ -64,19 +75,27 @@ func main() {
 		}
 	}()
 
-	runner := service.NewRunner(log, cons, pub, checks, runs, httpc, cfg.HTTP)
+	uc := &pingworker.Handler{
+		Checks: workerrepo.CheckRepo{R: checks},
+		Runs:   workerrepo.RunRepo{R: runs},
+		Events: workerrepo.Events{P: events},
+		Clock:  systemClock{},
+		HTTP:   pingworker.HTTPPing{Client: httpc, UserAgent: cfg.HTTP.UserAgent},
+	}
+
+	ctrl := &pingworker.Controller{Log: log, Sub: cons, UC: uc}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	errCh := make(chan error, 1)
-	go func() { errCh <- runner.Run(ctx) }()
+	go func() { errCh <- ctrl.Run(ctx) }()
 
 	select {
 	case <-ctx.Done():
 	case err = <-errCh:
 		if err != nil && !errors.Is(err, context.Canceled) {
-			log.Error("runner error", zap.Error(err))
+			log.Error("controller error", zap.Error(err))
 		}
 	}
 

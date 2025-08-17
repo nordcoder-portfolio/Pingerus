@@ -1,6 +1,9 @@
 package notification
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type Notification struct {
 	ID      int64     `json:"id"`
@@ -9,4 +12,12 @@ type Notification struct {
 	Type    string    `json:"type"`
 	SentAt  time.Time `json:"sent_at"`
 	Payload string    `json:"payload"`
+}
+
+type EmailSender interface {
+	Send(ctx context.Context, to, subject, body string) error
+}
+
+type Clock interface {
+	Now() time.Time
 }

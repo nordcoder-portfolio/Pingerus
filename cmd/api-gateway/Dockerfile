@@ -12,7 +12,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 FROM gcr.io/distroless/base-debian12 AS final
 
 COPY --from=builder /bin/api-gateway /bin/api-gateway
+COPY --from=builder /app/internal/config /config
 
-EXPOSE 8080 8081
+EXPOSE 8080 9090
 
 ENTRYPOINT ["/bin/api-gateway"]

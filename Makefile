@@ -68,6 +68,7 @@ kind-deploy:
 
 PROTO_DIR        := proto
 GOOGLEAPIS_DIR   := third_party/googleapis
+PGV_DIR          := third_party/protoc-gen-validate
 GO_OUT_DIR       := generated
 OPENAPI_OUT_DIR  := docs/spec
 
@@ -83,14 +84,16 @@ generate: bootstrap
 	@protoc \
 	  -I=$(PROTO_DIR) \
 	  -I=$(GOOGLEAPIS_DIR) \
+	  -I=$(PGV_DIR) \
 	  --experimental_allow_proto3_optional \
 	  --go_out=$(GO_OUT_DIR)               --go_opt=paths=source_relative \
 	  --go-grpc_out=$(GO_OUT_DIR)          --go-grpc_opt=paths=source_relative \
 	  --grpc-gateway_out=$(GO_OUT_DIR)     --grpc-gateway_opt=paths=source_relative,generate_unbound_methods=true \
 	  --openapiv2_out=$(OPENAPI_OUT_DIR)   --openapiv2_opt=generate_unbound_methods=true \
-	  --validate_out=lang=go:$(GO_OUT_DIR) \
+	  --validate_out=lang=go,paths=source_relative:$(GO_OUT_DIR) \
 	  $(shell find $(PROTO_DIR) -name '*.proto')
 	@echo "Protobuf code generated"
+
 
 
 clean:

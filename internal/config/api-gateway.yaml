@@ -1,0 +1,41 @@
+app:
+  name: "pingerus-api"
+  env: "production"
+  version: "1.0.0"
+
+server:
+  http_addr: ":8080"
+  grpc_addr: ":9090"
+  read_timeout: 10s
+  write_timeout: 10s
+  idle_timeout: 60s
+  graceful_timeout: 15s
+
+db:
+  dsn: "postgres://user:password@db-host:5432/pingerus?sslmode=disable"
+  max_conns: 20
+  min_conns: 2
+  max_conn_lifetime: 1h
+  max_conn_idle_time: 30m
+  health_check_period: 1m
+  query_timeout: 5s
+
+otel:
+  enable: true
+  otlp_endpoint: "otel-collector:4317"
+  service_name: "api-gateway"
+  sample_ratio: 0.1
+
+log:
+  level: "info"
+  pretty: false
+
+auth:
+  enable: true
+  jwt_secret: "super-secret"
+  access_ttl: 15m
+  refresh_ttl: 720h
+  cookie_name: "refresh_token"
+  cookie_domain: "pingerus.com"
+  cookie_path: "/"
+  cookie_secure: true

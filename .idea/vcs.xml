@@ -3,5 +3,6 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/third_party/googleapis" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/third_party/protoc-gen-validate" vcs="Git" />
   </component>
 </project>

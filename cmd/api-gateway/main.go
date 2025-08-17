@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	config "github.com/NordCoder/Pingerus/internal/config/api-gateway"
-	"github.com/NordCoder/Pingerus/internal/domain/check"
+	checkdomain "github.com/NordCoder/Pingerus/internal/domain/check"
 	"github.com/NordCoder/Pingerus/internal/services/api-gateway/auth"
-	service "github.com/NordCoder/Pingerus/internal/services/api-gateway/check"
+	check "github.com/NordCoder/Pingerus/internal/services/api-gateway/check"
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"google.golang.org/grpc/reflection"
 	"net"
@@ -29,7 +29,7 @@ import (
 )
 
 func main() {
-	cfg, err := config.Load("../../internal/config/config.yaml")
+	cfg, err := config.Load("../config/api-gateway.yaml")
 	if err != nil {
 		panic(err)
 	}
@@ -68,16 +68,16 @@ func main() {
 	}
 	defer db.Close()
 
-	var checkRepo check.Repo = pg.NewCheckRepo(db)
-	checkUC := check_usecase.NewCheckUsecase(checkRepo)
-	checkServ := service.NewServer(checkUC)
+	var checkRepo checkdomain.Repo = pg.NewCheckRepo(db)
+	checkUC := check.NewUsecase(checkRepo)
+	checkServ := check.NewServer(logger, checkUC)
 
 	userRepo := pg.NewUserRepo(db)
 	rtRepo := pg.NewRefreshTokenRepo(db)
 
-	authUsecase := checks.NewUseCase(
+	authUsecase := auth.NewUseCase(
 		userRepo, rtRepo,
-		checks.Config{
+		auth.Config{
 			Secret:     []byte(cfg.Auth.JWTSecret),
 			AccessTTL:  cfg.Auth.AccessTTL,
 			RefreshTTL: cfg.Auth.RefreshTTL,
@@ -182,9 +182,9 @@ func main() {
 
 type checkService struct {
 	pb.UnimplementedCheckServiceServer
-	uc *check_usecase.CheckUsecase
+	uc *check.Usecase
 }
 
-func NewCheckServiceServer(uc *check_usecase.CheckUsecase) *checkService {
+func NewCheckServiceServer(uc *check.Usecase) *checkService {
 	return &checkService{uc: uc}
 }

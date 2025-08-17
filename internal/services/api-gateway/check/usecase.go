@@ -14,22 +14,15 @@ var (
 )
 
 type Usecase struct {
-	repo *check.Repo
-	clk  func() time.Time
+	repo check.Repo
 }
 
-func New(repo *check.Repo, clk func() time.Time) *Usecase {
-	if clk == nil {
-		clk = func() time.Time { return time.Now().UTC() }
-	}
-	return &Usecase{repo: repo, clk: clk}
+func NewUsecase(repo check.Repo) *Usecase {
+	return &Usecase{repo: repo}
 }
 
 func (u *Usecase) Create(ctx context.Context, ownerID int64, url string, interval time.Duration) (*check.Check, error) {
-	if interval < 10*time.Second {
-		return nil, ErrInvalidInterval
-	}
-	now := u.clk()
+	now := time.Now().UTC()
 	c := &check.Check{
 		UserID:    ownerID,
 		URL:       url,
@@ -44,7 +37,7 @@ func (u *Usecase) Create(ctx context.Context, ownerID int64, url string, interva
 	return c, nil
 }
 
-func (u *Usecase) Get(ctx context.Context, requesterID int64, id check.ID) (*check.Check, error) {
+func (u *Usecase) Get(ctx context.Context, requesterID int64, id int64) (*check.Check, error) {
 	c, err := u.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -67,7 +60,7 @@ func (u *Usecase) Update(ctx context.Context, requesterID int64, upd *check.Chec
 		return nil, ErrInvalidInterval
 	}
 	upd.UserID = requesterID
-	upd.UpdatedAt = u.clk()
+	upd.UpdatedAt = time.Now().UTC()
 
 	if err := u.repo.Update(ctx, upd); err != nil {
 		return nil, err
@@ -75,7 +68,7 @@ func (u *Usecase) Update(ctx context.Context, requesterID int64, upd *check.Chec
 	return upd, nil
 }
 
-func (u *Usecase) Delete(ctx context.Context, requesterID int64, id check.ID) error {
+func (u *Usecase) Delete(ctx context.Context, requesterID int64, id int64) error {
 	cur, err := u.repo.GetByID(ctx, id)
 	if err != nil {
 		return err

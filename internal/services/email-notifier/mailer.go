@@ -3,7 +3,6 @@ package notifier
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	config "github.com/NordCoder/Pingerus/internal/config/email-notifier"
 	"net"
 	"net/smtp"
@@ -20,13 +19,10 @@ type Mailer struct {
 	subjPrefix string
 }
 
-func NewMailer(cfg config.SMTP) *Mailer {
+func New(cfg config.SMTP) *Mailer {
 	var auth smtp.Auth
 	if cfg.User != "" || cfg.Password != "" {
-		host := cfg.Addr
-		if i := strings.Index(host, ":"); i >= 0 {
-			host = host[:i]
-		}
+		host := host(cfg.Addr)
 		auth = smtp.PlainAuth("", cfg.User, cfg.Password, host)
 	}
 	return &Mailer{
@@ -39,9 +35,8 @@ func NewMailer(cfg config.SMTP) *Mailer {
 	}
 }
 
-func (m *Mailer) Send(ctx context.Context, to string, subject string, body string) error {
-	subj := fmt.Sprintf("%s %s", m.subjPrefix, subject)
-
+func (m *Mailer) Send(ctx context.Context, to, subject, body string) error {
+	subj := strings.TrimSpace(m.subjPrefix + " " + subject)
 	msg := []byte(
 		"From: " + m.from + "\r\n" +
 			"To: " + to + "\r\n" +
@@ -50,12 +45,13 @@ func (m *Mailer) Send(ctx context.Context, to string, subject string, body strin
 			"\r\n" + body + "\r\n")
 
 	dialer := net.Dialer{Timeout: m.timeout}
+
 	if m.useTLS {
 		conn, err := tls.DialWithDialer(&dialer, "tcp", m.addr, &tls.Config{InsecureSkipVerify: true})
 		if err != nil {
 			return err
 		}
-		c, err := smtp.NewClient(conn, smtpHost(m.addr))
+		c, err := smtp.NewClient(conn, host(m.addr))
 		if err != nil {
 			return err
 		}
@@ -86,7 +82,7 @@ func (m *Mailer) Send(ctx context.Context, to string, subject string, body strin
 	return smtp.SendMail(m.addr, m.auth, m.from, []string{to}, msg)
 }
 
-func smtpHost(addr string) string {
+func host(addr string) string {
 	if i := strings.Index(addr, ":"); i >= 0 {
 		return addr[:i]
 	}

@@ -3,23 +3,24 @@ package main
 import (
 	"context"
 	"errors"
-	config "github.com/NordCoder/Pingerus/internal/config/scheduler"
-	"github.com/NordCoder/Pingerus/internal/obs"
-	"github.com/NordCoder/Pingerus/internal/repository/kafka"
-	service "github.com/NordCoder/Pingerus/internal/services/scheduler"
+	"github.com/NordCoder/Pingerus/internal/services/scheduler"
+	"github.com/NordCoder/Pingerus/internal/services/scheduler/repo"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"go.uber.org/zap"
-
+	config "github.com/NordCoder/Pingerus/internal/config/scheduler"
+	"github.com/NordCoder/Pingerus/internal/obs"
+	kafkaRepo "github.com/NordCoder/Pingerus/internal/repository/kafka"
 	pg "github.com/NordCoder/Pingerus/internal/repository/postgres"
+
+	"go.uber.org/zap"
 )
 
 func main() {
-	cfg, err := config.Load("../../config/scheduler.yaml")
+	cfg, err := config.Load("../config/scheduler.yaml")
 	if err != nil {
 		panic(err)
 	}
@@ -42,8 +43,8 @@ func main() {
 
 	checkRepo := pg.NewCheckRepo(db)
 
-	kafkaProd := kafka.NewProducer(cfg.Kafka.Brokers, cfg.Kafka.Topic)
-	publisher := kafka.NewCheckEventsKafka(kafkaProd)
+	kafkaProd := kafkaRepo.NewProducer(cfg.Kafka.Brokers, cfg.Kafka.Topic)
+	publisher := kafkaRepo.NewCheckEventsKafka(kafkaProd)
 	defer kafkaProd.Close()
 
 	ms := obs.CreateMetricsServer(cfg.Sched.MetricsAddr, func(ctx context.Context) error {
@@ -58,7 +59,11 @@ func main() {
 		}
 	}()
 
-	runner := service.NewRunner(log, checkRepo, publisher, cfg.Sched)
+	uc := scheduler.NewUC(
+		repo.CheckRepo{R: checkRepo},
+		repo.Events{P: publisher},
+	)
+	runner := scheduler.New(log, uc, &cfg.Sched)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

@@ -6,8 +6,11 @@ networks:
 volumes:
   pgdata:
 
-x-env-db: &env_db
-  DB_DSN: "postgres://postgres:secret@db:5432/pingerus?sslmode=disable"
+x-env-secrets: &env_secrets
+  DB_DSN: "${DB_DSN}"
+  JWT_SECRET: "${JWT_SECRET}"
+  SMTP_USER: "${SMTP_USER}"
+  SMTP_PASSWORD: "${SMTP_PASSWORD}"
 
 services:
   db:
@@ -62,7 +65,7 @@ services:
       context: .
       dockerfile: cmd/migrator/Dockerfile
     environment:
-      <<: *env_db
+      DB_DSN: "${DB_DSN}"
     networks: [pingerus-net]
     depends_on:
       db:
@@ -74,10 +77,8 @@ services:
       context: .
       dockerfile: cmd/api-gateway/Dockerfile
     environment:
-      DB_DSN: "postgres://postgres:secret@db:5432/pingerus?sslmode=disable"
-      SERVER_HTTP_ADDR: ":8080"
-      SERVER_GRPC_ADDR: ":8081"
-      LOG_LEVEL: "info"
+      <<: *env_secrets
+    networks: [pingerus-net]
     depends_on:
       db:
         condition: service_healthy
@@ -85,10 +86,9 @@ services:
         condition: service_started
       migrator:
         condition: service_completed_successfully
-    networks: [pingerus-net]
     ports:
       - "8080:8080"
-      - "8081:8081"
+      - "9090:9090"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
       interval: 10s
@@ -101,13 +101,7 @@ services:
       context: .
       dockerfile: cmd/scheduler/Dockerfile
     environment:
-      <<: *env_db
-      KAFKA_BROKERS: "kafka:9092"
-      KAFKA_TOPIC: "pingerus.checks.request"
-      SCHED_TICK: "1s"
-      SCHED_BATCH_LIMIT: "100"
-      SCHED_METRICS_ADDR: ":8082"
-      LOG_LEVEL: "info"
+      <<: *env_secrets
     depends_on:
       db:
         condition: service_healthy
@@ -130,18 +124,7 @@ services:
       context: .
       dockerfile: cmd/ping-worker/Dockerfile
     environment:
-      <<: *env_db
-      KAFKA_IN_BROKERS: "kafka:9092"
-      KAFKA_IN_TOPIC: "pingerus.checks.request"
-      KAFKA_IN_GROUP_ID: "ping-worker"
-      KAFKA_OUT_BROKERS: "kafka:9092"
-      KAFKA_OUT_TOPIC: "pingerus.status.changed"
-      HTTP_TIMEOUT: "5s"
-      HTTP_FOLLOW_REDIRECTS: "true"
-      HTTP_VERIFY_TLS: "true"
-      HTTP_USER_AGENT: "Pingerus/1.0"
-      SERVER_METRICS_ADDR: ":8083"
-      LOG_LEVEL: "info"
+      <<: *env_secrets
     depends_on:
       db:
         condition: service_healthy
@@ -164,17 +147,7 @@ services:
       context: .
       dockerfile: cmd/email-notifier/Dockerfile
     environment:
-      <<: *env_db
-      KAFKA_IN_BROKERS: "kafka:9092"
-      KAFKA_IN_TOPIC: "pingerus.status.changed"
-      KAFKA_IN_GROUP_ID: "email-notifier"
-      SMTP_ADDR: "mailhog:1025"
-      SMTP_FROM: "noreply@pingerus.dev"
-      SMTP_USE_TLS: "false"
-      SMTP_TIMEOUT: "5s"
-      SMTP_SUBJ_PREFIX: "[Pingerus]"
-      SERVER_METRICS_ADDR: ":8084"
-      LOG_LEVEL: "info"
+      <<: *env_secrets
     depends_on:
       db:
         condition: service_healthy

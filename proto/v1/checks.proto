@@ -19,7 +19,6 @@ message Check {
 }
 
 message CreateCheckRequest {
-  // user_id приходит из auth в контроллере, поле держим для REST совместимости, но не доверяем.
   int64  user_id       = 1   [(validate.rules).int64.gte = 0];
   string url           = 2   [(validate.rules).string = {uri: true, min_len: 4, max_len: 2048}];
   int32  interval_sec  = 3   [(validate.rules).int32 = {gte: 10, lte: 86400}];

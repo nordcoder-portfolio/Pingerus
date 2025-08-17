@@ -109,8 +109,8 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "type": "integer",
-            "format": "int32"
+            "type": "string",
+            "format": "int64"
           }
         ],
         "tags": [
@@ -139,8 +139,8 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "type": "integer",
-            "format": "int32"
+            "type": "string",
+            "format": "int64"
           }
         ],
         "tags": [
@@ -170,8 +170,8 @@
             "name": "userId",
             "in": "path",
             "required": true,
-            "type": "integer",
-            "format": "int32"
+            "type": "string",
+            "format": "int64"
           }
         ],
         "tags": [
@@ -196,7 +196,8 @@
             },
             "intervalSec": {
               "type": "integer",
-              "format": "int32"
+              "format": "int32",
+              "title": "10s..24h"
             },
             "lastStatus": {
               "type": "boolean"
@@ -257,7 +258,8 @@
         },
         "intervalSec": {
           "type": "integer",
-          "format": "int32"
+          "format": "int32",
+          "title": "10s..24h"
         },
         "lastStatus": {
           "type": "boolean"
@@ -276,10 +278,11 @@
       "type": "object",
       "properties": {
         "userId": {
-          "type": "integer",
-          "format": "int32"
+          "type": "string",
+          "format": "int64",
+          "description": "user_id приходит из auth в контроллере, поле держим для REST совместимости, но не доверяем."
         },
-        "host": {
+        "url": {
           "type": "string"
         },
         "intervalSec": {
