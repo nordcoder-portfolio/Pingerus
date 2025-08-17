@@ -1,0 +1,22 @@
+# config/scheduler.yaml
+
+log_level: info   # debug|info|warn|error
+
+db:
+  url: "postgres://postgres:secret@localhost:5432/pingerus?sslmode=disable"
+  max_conns: 10
+  min_conns: 2
+  max_conn_lifetime: "30m"
+  max_conn_idle_time: "10m"
+  health_check_period: "30s"
+  query_timeout: "2s"
+
+kafka:
+  brokers:
+    - "localhost:9094"     # или "kafka:9092" в docker-compose
+  topic: "pingerus.checks.request"
+
+sched:
+  tick: "1s"               # как часто опрашивать БД
+  batch_limit: 100         # сколько due-чеков за тик
+  metrics_addr: ":8082"    # /metrics и /healthz

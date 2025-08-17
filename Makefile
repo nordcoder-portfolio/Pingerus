@@ -83,6 +83,7 @@ generate: bootstrap
 	@protoc \
 	  -I=$(PROTO_DIR) \
 	  -I=$(GOOGLEAPIS_DIR) \
+	  --experimental_allow_proto3_optional \
 	  --go_out=$(GO_OUT_DIR)               --go_opt=paths=source_relative \
 	  --go-grpc_out=$(GO_OUT_DIR)          --go-grpc_opt=paths=source_relative \
 	  --grpc-gateway_out=$(GO_OUT_DIR)     --grpc-gateway_opt=paths=source_relative,generate_unbound_methods=true \
@@ -90,6 +91,7 @@ generate: bootstrap
 	  --validate_out=lang=go:$(GO_OUT_DIR) \
 	  $(shell find $(PROTO_DIR) -name '*.proto')
 	@echo "Protobuf code generated"
+
 
 clean:
 	@rm -rf $(GO_OUT_DIR)/* $(OPENAPI_OUT_DIR)/*

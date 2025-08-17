@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"context"
 	"time"
 )
 
@@ -18,10 +17,4 @@ type RefreshToken struct {
 	IssuedAt  time.Time
 	ExpiresAt time.Time
 	Revoked   bool
-}
-
-type RefreshTokenRepo interface {
-	Create(ctx context.Context, t *RefreshToken) error
-	FindValid(ctx context.Context, tokenHash string) (*RefreshToken, error)
-	Revoke(ctx context.Context, tokenHash string) error
 }

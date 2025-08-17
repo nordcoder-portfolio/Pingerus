@@ -3,54 +3,71 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"github.com/NordCoder/Pingerus/internal/domain"
+	"github.com/NordCoder/Pingerus/internal/domain/run"
 )
 
-type RunRepo struct{ db *DB }
+var _ run.Repo = (*RunRepoImpl)(nil)
 
-func NewRunRepo(db *DB) *RunRepo { return &RunRepo{db: db} }
+type RunRepoImpl struct{ db *DB }
 
-const qRunInsert = `
-INSERT INTO runs(check_id, ts, status, latency_ms, code)
+func NewRunRepo(db *DB) *RunRepoImpl { return &RunRepoImpl{db: db} }
+
+const (
+	qRunInsert = `
+INSERT INTO runs (check_id, ts, status, latency_ms, code)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING id;
 `
-
-func (r *RunRepo) Insert(ctx context.Context, run domain.Run) (int64, error) {
-	ctx, cancel := r.db.withTimeout(ctx)
-	defer cancel()
-
-	var id int64
-	if err := r.db.Pool.QueryRow(ctx, qRunInsert, run.CheckID, run.Timestamp, run.Status, run.Latency, run.Code).Scan(&id); err != nil {
-		return 0, fmt.Errorf("insert run: %w", err)
-	}
-	return id, nil
-}
-
-func (r *RunRepo) LastByCheck(ctx context.Context, checkID int64, limit int) ([]domain.Run, error) {
-	q := `
+	qRunsByCheck = `
 SELECT id, check_id, ts, status, latency_ms, code
 FROM runs
-WHERE check_id=$1
+WHERE check_id = $1
 ORDER BY ts DESC
 LIMIT $2;
 `
-	ctx, cancel := r.db.withTimeout(ctx)
+)
+
+func (r *RunRepoImpl) Insert(ctx context.Context, run *run.Run) error {
+	ctx, cancel := r.db.withTimeout(context.Background())
 	defer cancel()
 
-	rows, err := r.db.Pool.Query(ctx, q, checkID, limit)
+	if err := r.db.Pool.QueryRow(ctx, qRunInsert,
+		run.CheckID,
+		run.Timestamp,
+		run.Status,
+		run.Latency,
+		run.Code,
+	).Scan(&run.ID); err != nil {
+		return fmt.Errorf("insert run: %w", err)
+	}
+	return nil
+}
+
+func (r *RunRepoImpl) ListByCheck(ctx context.Context, checkID int64, limit int) ([]*run.Run, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	ctx, cancel := r.db.withTimeout(context.Background())
+	defer cancel()
+
+	rows, err := r.db.Pool.Query(ctx, qRunsByCheck, checkID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("query runs: %w", err)
 	}
 	defer rows.Close()
 
-	var res []domain.Run
+	out := make([]*run.Run, 0, limit)
 	for rows.Next() {
-		var rr domain.Run
+		var rr run.Run
 		if err := rows.Scan(&rr.ID, &rr.CheckID, &rr.Timestamp, &rr.Status, &rr.Latency, &rr.Code); err != nil {
 			return nil, fmt.Errorf("scan run: %w", err)
 		}
-		res = append(res, rr)
+		rp := rr
+		out = append(out, &rp)
 	}
-	return res, nil
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows: %w", err)
+	}
+	return out, nil
 }

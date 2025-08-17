@@ -9,7 +9,7 @@ import (
 )
 
 type Config struct {
-	URL               string
+	DSN               string
 	MaxConns          int32
 	MinConns          int32
 	MaxConnLifetime   time.Duration
@@ -23,8 +23,8 @@ type DB struct {
 	QueryTimeout time.Duration
 }
 
-func New(ctx context.Context, cfg Config) (*DB, error) {
-	pcfg, err := pgxpool.ParseConfig(cfg.URL)
+func NewDB(ctx context.Context, cfg Config) (*DB, error) {
+	pcfg, err := pgxpool.ParseConfig(cfg.DSN)
 	if err != nil {
 		return nil, fmt.Errorf("parse pool config: %w", err)
 	}
@@ -49,7 +49,6 @@ func New(ctx context.Context, cfg Config) (*DB, error) {
 		return nil, fmt.Errorf("create pool: %w", err)
 	}
 
-	// Health-check
 	hctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := pool.Ping(hctx); err != nil {

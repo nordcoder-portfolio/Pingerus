@@ -1,4 +1,4 @@
-package domain
+package check
 
 import "time"
 
@@ -13,13 +13,4 @@ type Check struct {
 	NextRun    time.Time     `json:"next_run"`
 	CreatedAt  time.Time     `json:"created_at"`
 	UpdatedAt  time.Time     `json:"updated_at"`
-}
-
-type CheckRepo interface {
-	Create(c *Check) error
-	GetByID(id int64) (*Check, error)
-	ListByUser(userID int64) ([]*Check, error)
-	Update(c *Check) error
-	Delete(id int64) error
-	FetchDue(limit int) ([]*Check, error)
 }

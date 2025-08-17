@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/NordCoder/Pingerus/internal/domain/auth"
 	"math/rand"
 	"strings"
 	"time"
@@ -14,7 +15,7 @@ import (
 
 var ErrTokenInvalid = errors.New("invalid token")
 
-func ParseAndValidate(token string, secret []byte) (*AccessClaims, error) {
+func ParseAndValidate(token string, secret []byte) (*auth.AccessClaims, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return nil, ErrTokenInvalid
@@ -35,7 +36,7 @@ func ParseAndValidate(token string, secret []byte) (*AccessClaims, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode payload: %w", err)
 	}
-	var claims AccessClaims
+	var claims auth.AccessClaims
 	if err := json.Unmarshal(payloadJSON, &claims); err != nil {
 		return nil, fmt.Errorf("unmarshal claims: %w", err)
 	}
@@ -51,7 +52,7 @@ func ParseAndValidate(token string, secret []byte) (*AccessClaims, error) {
 	return &claims, nil
 }
 
-func (c AccessClaims) SignedString(secret []byte) (string, error) {
+func SignedString(c auth.AccessClaims, secret []byte) (string, error) {
 	header := base64URL([]byte(`{"alg":"HS256","typ":"JWT"}`))
 
 	payloadJSON, err := json.Marshal(c)

@@ -1,78 +1,54 @@
 syntax = "proto3";
-package pingerus.v1;
 
-option go_package = "github.com/NordCoder/Pingerus/generated;generated";
+package pingerus.v1;
+option go_package = "github.com/NordCoder/Pingerus/generated/v1;generated";
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/empty.proto";
 import "google/api/annotations.proto";
+import "validate/validate.proto";
 
 message Check {
-  int32                     id           = 1;
-  int32                     user_id      = 2;
-  string                    host         = 3;
-  int32                     interval_sec = 4;
-  bool                      last_status  = 5;
-  google.protobuf.Timestamp next_run     = 6;
-  google.protobuf.Timestamp updated_at   = 7;
+  int64                      id            = 1   [(validate.rules).int64.gte = 0];
+  int64                      user_id       = 2   [(validate.rules).int64.gt  = 0];
+  string                     url           = 3   [(validate.rules).string = {uri: true, min_len: 4, max_len: 2048}];
+  int32                      interval_sec  = 4   [(validate.rules).int32 = {gte: 10, lte: 86400}]; // 10s..24h
+  optional bool              last_status   = 5;
+  google.protobuf.Timestamp  next_run      = 6;
+  google.protobuf.Timestamp  updated_at    = 7;
 }
 
 message CreateCheckRequest {
-  int32  user_id      = 1;
-  string host         = 2;
-  int32  interval_sec = 3;
+  // user_id приходит из auth в контроллере, поле держим для REST совместимости, но не доверяем.
+  int64  user_id       = 1   [(validate.rules).int64.gte = 0];
+  string url           = 2   [(validate.rules).string = {uri: true, min_len: 4, max_len: 2048}];
+  int32  interval_sec  = 3   [(validate.rules).int32 = {gte: 10, lte: 86400}];
 }
 
-message CreateCheckResponse {
-  Check check = 1;
-}
+message CreateCheckResponse { Check check = 1; }
 
-message GetCheckRequest {
-  int32 id = 1;
-}
+message GetCheckRequest     { int64 id = 1 [(validate.rules).int64.gt = 0]; }
+message DeleteCheckRequest  { int64 id = 1 [(validate.rules).int64.gt = 0]; }
 
-message DeleteCheckRequest {
-  int32 id = 1;
-}
+message UpdateCheckRequest  { Check check = 1 [(validate.rules).message.required = true]; }
 
-message UpdateCheckRequest {
-  Check check = 1;
-}
-
-message ListChecksRequest {
-  int32 user_id = 1;
-}
-
-message ListChecksResponse {
-  repeated Check checks = 1;
-}
+message ListChecksRequest   { int64 user_id = 1 [(validate.rules).int64.gt = 0]; }
+message ListChecksResponse  { repeated Check checks = 1; }
 
 service CheckService {
   rpc CreateCheck(CreateCheckRequest) returns (CreateCheckResponse) {
-    option (google.api.http) = {
-      post: "/v1/checks"
-      body: "*"
-    };
+    option (google.api.http) = { post: "/v1/checks", body: "*" };
   }
   rpc GetCheck(GetCheckRequest) returns (Check) {
-    option (google.api.http) = {
-      get: "/v1/checks/{id}"
-    };
+    option (google.api.http) = { get: "/v1/checks/{id}" };
   }
   rpc UpdateCheck(UpdateCheckRequest) returns (Check) {
-    option (google.api.http) = {
-      put: "/v1/checks/{check.id}"
-      body: "*"
-    };
+    option (google.api.http) = { put: "/v1/checks/{check.id}", body: "*" };
   }
   rpc DeleteCheck(DeleteCheckRequest) returns (google.protobuf.Empty) {
-    option (google.api.http) = {
-      delete: "/v1/checks/{id}"
-    };
+    option (google.api.http) = { delete: "/v1/checks/{id}" };
   }
   rpc ListChecks(ListChecksRequest) returns (ListChecksResponse) {
-    option (google.api.http) = {
-      get: "/v1/users/{user_id}/checks"
-    };
+    option (google.api.http) = { get: "/v1/users/{user_id}/checks" };
   }
 }

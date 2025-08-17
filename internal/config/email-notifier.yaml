@@ -1,0 +1,16 @@
+log_level: info
+db:
+  url: "postgres://postgres:secret@db:5432/pingerus?sslmode=disable"
+  query_timeout: "2s"
+kafka_in:
+  brokers: ["kafka:9092"]
+  topic: "pingerus.status.changed"
+  group_id: "email-notifier"
+smtp:
+  addr: "mailhog:1025"
+  from: "noreply@pingerus.dev"
+  use_tls: false
+  timeout: "5s"
+  subj_prefix: "[Pingerus]"
+server:
+  metrics_addr: ":8084"

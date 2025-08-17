@@ -3,7 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"github.com/NordCoder/Pingerus/internal/auth"
+	"github.com/NordCoder/Pingerus/internal/domain/auth"
 )
 
 type RefreshTokenRepo struct{ db *DB }

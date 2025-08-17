@@ -1,8 +1,6 @@
-package domain
+package user
 
-import (
-	"time"
-)
+import "time"
 
 type User struct {
 	ID        int64     `json:"id"`
@@ -10,11 +8,4 @@ type User struct {
 	Password  string    `json:"-"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
-}
-
-type UserRepo interface {
-	Create(u *User) error
-	GetByID(id int64) (*User, error)
-	GetByEmail(email string) (*User, error)
-	Update(u *User) error
 }
