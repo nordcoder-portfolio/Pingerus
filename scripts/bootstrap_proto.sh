@@ -1,25 +1,33 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# --- pkgs for apt/yum ---
 if command -v apt-get &>/dev/null; then
   sudo apt-get update -qq
   sudo apt-get install -y --no-install-recommends \
-    curl build-essential protobuf-compiler
+    curl build-essential protobuf-compiler git
 elif command -v yum &>/dev/null; then
   sudo yum install -y \
-    curl gcc make protobuf-compiler
+    curl gcc make protobuf-compiler git
 else
   echo "Неизвестный пакетный менеджер. Поддерживаются apt-get и yum."
   exit 1
 fi
 
 if ! command -v protoc &>/dev/null; then
-  echo "protoc не установлен после установки protobuf-compiler"
+  echo "❌ protoc не установлен после установки protobuf-compiler"
   exit 1
 fi
-echo "protoc version: $(protoc --version)"
+echo "✔ protoc version: $(protoc --version)"
+
+# --- check go ---
+if ! command -v go &>/dev/null; then
+  echo "❌ Go не найден. Установите Go >= 1.21: https://go.dev/dl/"
+  exit 1
+fi
 
 export PATH="$HOME/go/bin:$PATH"
+
 PLUGINS=(
   google.golang.org/protobuf/cmd/protoc-gen-go
   google.golang.org/grpc/cmd/protoc-gen-go-grpc

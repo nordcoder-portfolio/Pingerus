@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"errors"
+	"github.com/NordCoder/Pingerus/internal/domain/auth"
 	"net/http"
 	"strings"
 	"time"
@@ -22,7 +24,7 @@ import (
 type Server struct {
 	pb.UnimplementedAuthServiceServer
 	log          *zap.Logger
-	uc           *Usecase
+	uc           auth.Usecase
 	users        user.Repo
 	cookieName   string
 	cookieDomain string
@@ -40,7 +42,7 @@ type Opts struct {
 	RefreshTTL   time.Duration
 }
 
-func NewServer(uc *Usecase, users user.Repo, o Opts) *Server {
+func NewServer(uc auth.Usecase, users user.Repo, o Opts) *Server {
 	log := o.Logger
 	if log == nil {
 		log, _ = zap.NewProduction()
@@ -133,12 +135,12 @@ func (s *Server) Me(ctx context.Context, _ *emptypb.Empty) (*pb.User, error) {
 }
 
 func (s *Server) mapErr(err error) error {
-	switch err {
-	case ErrInvalidCredentials:
+	switch {
+	case errors.Is(err, ErrInvalidCredentials):
 		return status.Error(codes.Unauthenticated, err.Error())
-	case ErrEmailExists:
+	case errors.Is(err, ErrEmailExists):
 		return status.Error(codes.AlreadyExists, err.Error())
-	case ErrWeakPassword:
+	case errors.Is(err, ErrWeakPassword):
 		return status.Error(codes.InvalidArgument, err.Error())
 	default:
 		return err

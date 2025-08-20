@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"github.com/NordCoder/Pingerus/internal/obs/retry"
+	outbox2 "github.com/NordCoder/Pingerus/internal/outbox"
 	pingworker "github.com/NordCoder/Pingerus/internal/services/ping-worker"
 	"net/http"
 	"os"
@@ -38,6 +40,16 @@ func main() {
 	log = log.With(zap.String("service", "ping-worker"))
 
 	root := context.Background()
+	//otelCloser, err := obs.SetupOTel(root, obs.OTELConfig{
+	//	Enable:      true,
+	//	Endpoint:    "",
+	//	ServiceName: "ping-worker",
+	//	SampleRatio: 1.0,
+	//})
+	//if err != nil {
+	//	log.Fatal("otel init", zap.Error(err))
+	//}
+	//defer otelCloser.Shutdown(context.Background())
 
 	db, err := pg.NewDB(root, cfg.DB)
 	if err != nil {
@@ -55,6 +67,19 @@ func main() {
 	defer prod.Close()
 
 	events := kafka.NewCheckEventsKafka(prod)
+
+	outboxRepo := pg.NewOutboxRepo(db)
+	transactor := pg.NewTransactor(db, log)
+
+	dispatch := outbox2.MakeGlobalOutboxHandler(events, retry.DefaultKafkaPolicy(log))
+	outboxRunner := outbox2.NewOutboxRunner( // todo config
+		log,
+		outboxRepo,
+		dispatch,
+		20,
+		100,
+		2*time.Second,
+		30*time.Second)
 
 	httpc := pingworker.New(config.HTTPPing{
 		Timeout:         cfg.HTTP.Timeout,
@@ -76,17 +101,21 @@ func main() {
 	}()
 
 	uc := &pingworker.Handler{
-		Checks: workerrepo.CheckRepo{R: checks},
-		Runs:   workerrepo.RunRepo{R: runs},
-		Events: workerrepo.Events{P: events},
-		Clock:  systemClock{},
-		HTTP:   pingworker.HTTPPing{Client: httpc, UserAgent: cfg.HTTP.UserAgent},
+		Checks:     workerrepo.CheckRepo{R: checks},
+		Runs:       workerrepo.RunRepo{R: runs},
+		Outbox:     outboxRepo,
+		Transactor: transactor,
+		Events:     workerrepo.Events{P: events},
+		Clock:      systemClock{},
+		HTTP:       pingworker.HTTPPing{Client: httpc, UserAgent: cfg.HTTP.UserAgent},
 	}
 
 	ctrl := &pingworker.Controller{Log: log, Sub: cons, UC: uc}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	outboxRunner.Start(ctx)
 
 	errCh := make(chan error, 1)
 	go func() { errCh <- ctrl.Run(ctx) }()

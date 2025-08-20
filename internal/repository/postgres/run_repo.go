@@ -28,19 +28,18 @@ LIMIT $2;
 )
 
 func (r *RunRepoImpl) Insert(ctx context.Context, run *run.Run) error {
-	ctx, cancel := r.db.withTimeout(context.Background())
+	ctx, cancel := r.db.withTimeout(ctx)
 	defer cancel()
 
-	if err := r.db.Pool.QueryRow(ctx, qRunInsert,
-		run.CheckID,
-		run.Timestamp,
-		run.Status,
-		run.Latency,
-		run.Code,
-	).Scan(&run.ID); err != nil {
-		return fmt.Errorf("insert run: %w", err)
-	}
-	return nil
+	q := `
+INSERT INTO runs (check_id, ts, status, code, latency_ms)
+VALUES ($1,$2,$3,$4,$5)
+RETURNING id;`
+
+	eq := r.db.execQueryer(ctx)
+	return eq.QueryRow(ctx, q,
+		run.CheckID, run.Timestamp, run.Status, run.Code, run.Latency,
+	).Scan(&run.ID)
 }
 
 func (r *RunRepoImpl) ListByCheck(ctx context.Context, checkID int64, limit int) ([]*run.Run, error) {

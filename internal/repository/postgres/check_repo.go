@@ -143,25 +143,17 @@ func (r *CheckRepoImpl) ListByUser(ctx context.Context, userID int64) ([]*check.
 }
 
 func (r *CheckRepoImpl) Update(ctx context.Context, c *check.Check) error {
-	ctx, cancel := r.db.withTimeout(context.Background())
+	ctx, cancel := r.db.withTimeout(ctx)
 	defer cancel()
 
-	intervalSec := int(c.Interval / time.Second)
-	var nextRun *time.Time
-	if !c.NextRun.IsZero() {
-		t := c.NextRun
-		nextRun = &t
-	}
+	q := `
+UPDATE checks
+SET last_status = $2, updated_at = now()
+WHERE id = $1;`
 
-	row := r.db.Pool.QueryRow(ctx, qUpdate,
-		c.ID,
-		c.URL,
-		intervalSec,
-		c.LastStatus,
-		nextRun,
-		c.Active,
-	)
-	return scanFull(row, c)
+	eq := r.db.execQueryer(ctx)
+	_, err := eq.Exec(ctx, q, c.ID, c.LastStatus)
+	return err
 }
 
 func (r *CheckRepoImpl) Delete(ctx context.Context, id int64) error {

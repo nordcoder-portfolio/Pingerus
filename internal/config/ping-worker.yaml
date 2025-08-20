@@ -25,4 +25,4 @@ http:
 server:
   metrics_addr: ":8083"
 
-log_level: "info"
+log_level: "debug"

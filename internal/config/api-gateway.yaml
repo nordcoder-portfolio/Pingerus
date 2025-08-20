@@ -21,7 +21,7 @@ db:
   query_timeout: 5s
 
 otel:
-  enable: true
+  enable: false
   otlp_endpoint: "otel-collector:4317"
   service_name: "api-gateway"
   sample_ratio: 0.1

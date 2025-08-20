@@ -16,4 +16,4 @@ sched:
   batch_limit: 100
   metrics_addr: ":8082"
 
-log_level: "info"
+log_level: "debug"

@@ -13,6 +13,17 @@ x-env-secrets: &env_secrets
   SMTP_PASSWORD: "${SMTP_PASSWORD}"
 
 services:
+  http-echo:
+    image: mendhak/http-https-echo:32
+    networks: [ pingerus-net ]
+    environment:
+      - HTTP_PORT=80
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:80/" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   db:
     image: postgres:16
     environment:

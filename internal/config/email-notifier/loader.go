@@ -21,8 +21,8 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("db.health_check_period", "30s")
 	v.SetDefault("db.query_timeout", "2s")
 
-	v.SetDefault("kafka_in.brokers", []string{"localhost:9094"})
-	v.SetDefault("kafka_in.topic", "pingerus.status.changed")
+	v.SetDefault("kafka_in.brokers", []string{"kafka:9092"})
+	v.SetDefault("kafka_in.topic", "pingerus.status.change")
 	v.SetDefault("kafka_in.group_id", "email-notifier")
 
 	v.SetDefault("smtp.addr", "localhost:1025")

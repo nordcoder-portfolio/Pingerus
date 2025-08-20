@@ -13,15 +13,15 @@ kafka_in:
   group_id: "email-notifier"
 
 smtp:
-  addr: "smtp.mailgun.org:587"
+  addr: "mailhog:1025"
   from: "noreply@pingerus.com"
   user: "apikey"
   password: "smtp-password"
-  use_tls: true
+  use_tls: false
   timeout: 10s
   subj_prefix: "[Pingerus]"
 
 server:
   metrics_addr: ":8084"
 
-log_level: "info"
+log_level: "debug"

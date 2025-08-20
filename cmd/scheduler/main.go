@@ -34,6 +34,16 @@ func main() {
 	log = log.With(zap.String("service", "scheduler"))
 
 	ctx := context.Background()
+	otelCloser, err := obs.SetupOTel(ctx, obs.OTELConfig{
+		Enable:      true,
+		Endpoint:    "",
+		ServiceName: "scheduler",
+		SampleRatio: 1.0,
+	})
+	if err != nil {
+		log.Fatal("otel init", zap.Error(err))
+	}
+	defer otelCloser.Shutdown(context.Background())
 
 	db, err := pg.NewDB(ctx, cfg.DB)
 	if err != nil {

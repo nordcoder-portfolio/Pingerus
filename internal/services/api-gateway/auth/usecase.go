@@ -45,16 +45,12 @@ func normalizeEmail(s string) string {
 
 func (u *Usecase) SignUp(ctx context.Context, email, password string) (*user.User, string, string, error) {
 	email = normalizeEmail(email)
-	if len(password) < 8 {
-		return nil, "", "", ErrWeakPassword
-	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("hash password: %w", err)
+		return nil, "", "", fmt.Errorf("failed to hash password: %w", err)
 	}
 	newUser := &user.User{Email: email, Password: string(hash), CreatedAt: u.cfg.Now(), UpdatedAt: u.cfg.Now()}
 	if err := u.users.Create(ctx, newUser); err != nil {
-		// маппим нарушение уникальности email (сделай UNIQUE(email) в БД) в ErrEmailExists
 		if isUniqueViolation(err) {
 			return nil, "", "", ErrEmailExists
 		}

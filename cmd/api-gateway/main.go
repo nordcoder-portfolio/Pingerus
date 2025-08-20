@@ -3,12 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	config "github.com/NordCoder/Pingerus/internal/config/api-gateway"
-	checkdomain "github.com/NordCoder/Pingerus/internal/domain/check"
-	"github.com/NordCoder/Pingerus/internal/services/api-gateway/auth"
-	check "github.com/NordCoder/Pingerus/internal/services/api-gateway/check"
-	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	"google.golang.org/grpc/reflection"
 	"net"
 	"net/http"
 	"os"
@@ -16,16 +10,22 @@ import (
 	"syscall"
 	"time"
 
-	pb "github.com/NordCoder/Pingerus/generated/v1"
+	config "github.com/NordCoder/Pingerus/internal/config/api-gateway"
+	checkdomain "github.com/NordCoder/Pingerus/internal/domain/check"
 	"github.com/NordCoder/Pingerus/internal/obs"
 	pg "github.com/NordCoder/Pingerus/internal/repository/postgres"
+	"github.com/NordCoder/Pingerus/internal/services/api-gateway/auth"
+	check "github.com/NordCoder/Pingerus/internal/services/api-gateway/check"
 
+	pb "github.com/NordCoder/Pingerus/generated/v1"
 	pbauth "github.com/NordCoder/Pingerus/generated/v1"
 
+	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/reflection"
 )
 
 func main() {
@@ -70,12 +70,11 @@ func main() {
 
 	var checkRepo checkdomain.Repo = pg.NewCheckRepo(db)
 	checkUC := check.NewUsecase(checkRepo)
-	checkServ := check.NewServer(logger, checkUC)
+	checkSrv := check.NewServer(logger, checkUC)
 
 	userRepo := pg.NewUserRepo(db)
 	rtRepo := pg.NewRefreshTokenRepo(db)
-
-	authUsecase := auth.NewUseCase(
+	authUC := auth.NewUseCase(
 		userRepo, rtRepo,
 		auth.Config{
 			Secret:     []byte(cfg.Auth.JWTSecret),
@@ -83,10 +82,10 @@ func main() {
 			RefreshTTL: cfg.Auth.RefreshTTL,
 		},
 	)
-
-	authServer := auth.NewServer(
-		authUsecase, userRepo,
+	authSrv := auth.NewServer(
+		authUC, userRepo,
 		auth.Opts{
+			Logger:       logger,
 			CookieName:   cfg.Auth.CookieName,
 			CookieDomain: cfg.Auth.CookieDomain,
 			CookiePath:   cfg.Auth.CookiePath,
@@ -96,20 +95,23 @@ func main() {
 	)
 
 	grpcMetrics := grpcprometheus.NewServerMetrics()
-	opts := obs.GRPCServerOpts()
 
+	opts := obs.GRPCServerOpts()
 	opts = append(opts,
 		grpc.ChainUnaryInterceptor(
-			auth.UnaryAuthInterceptor(authUsecase.ParseAccess),
+			grpcMetrics.UnaryServerInterceptor(),
+			auth.UnaryAuthInterceptor(authUC.ParseAccess),
+		),
+		grpc.ChainStreamInterceptor(
+			grpcMetrics.StreamServerInterceptor(),
 		),
 	)
 
 	grpcServer := grpc.NewServer(opts...)
 	grpcMetrics.InitializeMetrics(grpcServer)
 
-	pb.RegisterCheckServiceServer(grpcServer, checkServ)
-
-	pbauth.RegisterAuthServiceServer(grpcServer, authServer)
+	pb.RegisterCheckServiceServer(grpcServer, checkSrv)
+	pbauth.RegisterAuthServiceServer(grpcServer, authSrv)
 	reflection.Register(grpcServer)
 
 	grpcLn, err := net.Listen("tcp", cfg.Server.GRPCAddr)
@@ -117,18 +119,32 @@ func main() {
 		logger.Fatal("grpc listen", zap.Error(err))
 	}
 
-	mux := runtime.NewServeMux()
-	dialOpts := []grpc.DialOption{grpc.WithInsecure()}
-	{
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := pb.RegisterCheckServiceHandlerFromEndpoint(ctx, mux, cfg.Server.GRPCAddr, dialOpts); err != nil {
-			logger.Fatal("register http gateway", zap.Error(err))
+	go func() {
+		logger.Info("grpc listening", zap.String("addr", cfg.Server.GRPCAddr))
+		if err := grpcServer.Serve(grpcLn); err != nil {
+			logger.Error("grpc serve", zap.Error(err))
 		}
+	}()
 
-		if err := pbauth.RegisterAuthServiceHandlerFromEndpoint(ctx, mux, cfg.Server.GRPCAddr, dialOpts); err != nil {
-			logger.Fatal("register auth http gateway", zap.Error(err))
-		}
+	dialCtx, dialCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer dialCancel()
+	conn, err := grpc.DialContext(
+		dialCtx,
+		cfg.Server.GRPCAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
+	if err != nil {
+		logger.Fatal("grpc dial for gateway", zap.Error(err))
+	}
+	defer conn.Close()
+
+	mux := runtime.NewServeMux()
+	if err := pb.RegisterCheckServiceHandler(context.Background(), mux, conn); err != nil {
+		logger.Fatal("register check http gateway", zap.Error(err))
+	}
+	if err := pbauth.RegisterAuthServiceHandler(context.Background(), mux, conn); err != nil {
+		logger.Fatal("register auth http gateway", zap.Error(err))
 	}
 
 	root := http.NewServeMux()
@@ -138,7 +154,7 @@ func main() {
 		hctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancel()
 		if err := db.Pool.Ping(hctx); err != nil {
-			http.Error(w, "unhealthy", http.StatusServiceUnavailable)
+			http.Error(w, "unhealthy: db", http.StatusServiceUnavailable)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -154,22 +170,19 @@ func main() {
 
 	errCh := make(chan error, 2)
 	go func() {
-		logger.Info("grpc listening", zap.String("addr", cfg.Server.GRPCAddr))
-		errCh <- grpcServer.Serve(grpcLn)
-	}()
-	go func() {
 		logger.Info("http listening", zap.String("addr", cfg.Server.HTTPAddr))
 		errCh <- httpSrv.ListenAndServe()
 	}()
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	var serveErr error
 	select {
 	case s := <-sig:
 		logger.Info("shutdown signal", zap.String("sig", s.String()))
-	case err = <-errCh:
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("server error", zap.Error(err))
+	case serveErr = <-errCh:
+		if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			logger.Error("server error", zap.Error(serveErr))
 		}
 	}
 
@@ -178,13 +191,4 @@ func main() {
 	grpcServer.GracefulStop()
 	_ = httpSrv.Shutdown(shCtx)
 	logger.Info("bye")
-}
-
-type checkService struct {
-	pb.UnimplementedCheckServiceServer
-	uc *check.Usecase
-}
-
-func NewCheckServiceServer(uc *check.Usecase) *checkService {
-	return &checkService{uc: uc}
 }

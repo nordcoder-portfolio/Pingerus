@@ -17,7 +17,7 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("app.name", "api-gateway")
 	v.SetDefault("app.env", "dev")
 	v.SetDefault("server.http_addr", ":8080")
-	v.SetDefault("server.grpc_addr", ":8081")
+	v.SetDefault("server.grpc_addr", ":9090")
 	v.SetDefault("server.read_timeout", "5s")
 	v.SetDefault("server.write_timeout", "5s")
 	v.SetDefault("server.idle_timeout", "60s")
