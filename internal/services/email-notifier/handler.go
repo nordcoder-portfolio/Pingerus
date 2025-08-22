@@ -24,7 +24,6 @@ type Handler struct {
 	Out    notification.EmailSender
 	Clock  notification.Clock
 
-	// необязательно, но удобно для детальных логов
 	Log *zap.Logger
 }
 
@@ -75,7 +74,6 @@ func (h *Handler) HandleStatusChange(ctx context.Context, ev StatusChange) error
 		zap.Duration("elapsed", time.Since(sendStart)),
 	)
 
-	// best-effort запись события (логируем только ошибку, но не фэйлим общий пайп)
 	if err := h.Store.Create(ctx, &notification.Notification{
 		CheckID: chk.ID,
 		UserID:  u.ID,

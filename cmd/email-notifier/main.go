@@ -24,13 +24,11 @@ type systemClock struct{}
 func (systemClock) Now() time.Time { return time.Now().UTC() }
 
 func main() {
-	// ── Load config
 	cfg, err := config.Load("../config/email-notifier.yaml")
 	if err != nil {
 		panic(err)
 	}
 
-	// ── Logger
 	logCfg := zap.NewProductionConfig()
 	if cfg.LogLevel == "debug" {
 		logCfg = zap.NewDevelopmentConfig()
@@ -57,7 +55,6 @@ func main() {
 	}
 	defer otelCloser.Shutdown(context.Background())
 
-	// ── DB
 	db, err := pg.NewDB(rootCtx, cfg.DB)
 	if err != nil {
 		log.Fatal("db connect", zap.Error(err))
@@ -65,12 +62,17 @@ func main() {
 	defer db.Close()
 	log.Info("db connected")
 
-	// ── Repos
 	checks := pg.NewCheckRepo(db)
 	users := pg.NewUserRepo(db)
 	notifs := pg.NewNotificationRepo(db)
 
-	// ── Kafka consumer
+	_ = kafka.EnsureTopic(rootCtx, cfg.In.Brokers, kafka.TopicSpec{
+		Name:              cfg.In.Topic,
+		NumPartitions:     1,
+		ReplicationFactor: 1,
+		MaxWait:           5 * time.Second,
+	}, log)
+
 	cons := kafka.NewConsumer(cfg.In.Brokers, cfg.In.GroupID, cfg.In.Topic).WithLogger(log)
 	defer cons.Close()
 	log.Info("kafka consumer initialized",
@@ -79,7 +81,6 @@ func main() {
 		zap.String("topic", cfg.In.Topic),
 	)
 
-	// ── Metrics/health server
 	ms := obs.CreateMetricsServer(cfg.Server.MetricsAddr, func(ctx context.Context) error {
 		hctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 		defer cancel()
@@ -92,7 +93,6 @@ func main() {
 		}
 	}()
 
-	// ── Mailer & usecase
 	mailer := notifier.New(cfg.SMTP).WithLogger(log)
 	uc := &notifier.Handler{
 		Checks: repo.CheckReader{R: checks},
@@ -105,7 +105,6 @@ func main() {
 
 	ctrl := &notifier.Controller{Log: log, Sub: cons, UC: uc}
 
-	// ── Run
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -125,7 +124,6 @@ func main() {
 		}
 	}
 
-	// ── Shutdown
 	shCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	_ = ms.Shutdown(shCtx)

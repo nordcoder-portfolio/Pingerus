@@ -12,7 +12,7 @@ message Check {
   int64                      id            = 1   [(validate.rules).int64.gte = 0];
   int64                      user_id       = 2   [(validate.rules).int64.gt  = 0];
   string                     url           = 3   [(validate.rules).string = {uri: true, min_len: 4, max_len: 2048}];
-  int32                      interval_sec  = 4   [(validate.rules).int32 = {gte: 10, lte: 86400}]; // 10s..24h
+  int32                      interval_sec  = 4   [(validate.rules).int32 = {gte: 10, lte: 86400}];
   optional bool              last_status   = 5;
   google.protobuf.Timestamp  next_run      = 6;
   google.protobuf.Timestamp  updated_at    = 7;

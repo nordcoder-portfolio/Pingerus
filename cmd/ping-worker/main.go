@@ -60,10 +60,17 @@ func main() {
 	checks := pg.NewCheckRepo(db)
 	runs := pg.NewRunRepo(db)
 
+	_ = kafka.EnsureTopic(root, cfg.In.Brokers, kafka.TopicSpec{
+		Name:              cfg.In.Topic,
+		NumPartitions:     1,
+		ReplicationFactor: 1,
+		MaxWait:           5 * time.Second,
+	}, log)
+
 	cons := kafka.NewConsumer(cfg.In.Brokers, cfg.In.GroupID, cfg.In.Topic)
 	defer cons.Close()
 
-	prod := kafka.NewProducer(cfg.Out.Brokers, cfg.Out.Topic)
+	prod := kafka.NewProducer(cfg.Out.Brokers, cfg.Out.Topic).WithLogger(log)
 	defer prod.Close()
 
 	events := kafka.NewCheckEventsKafka(prod)

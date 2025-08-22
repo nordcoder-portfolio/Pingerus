@@ -10,13 +10,13 @@ db:
 kafka_in:
   brokers: ["kafka:9092"]
   topic: "status-change"
-  group_id: "email-notifier"
+  group_id: "email-notifier-dev"
 
 smtp:
   addr: "mailhog:1025"
   from: "noreply@pingerus.com"
-  user: "apikey"
-  password: "smtp-password"
+  user: ""
+  password: ""
   use_tls: false
   timeout: 10s
   subj_prefix: "[Pingerus]"

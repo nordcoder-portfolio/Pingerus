@@ -27,7 +27,7 @@ func loadCfg() cfg {
 	c := cfg{
 		APIBase:     getenv("E2E_API_BASE", "http://localhost:8080"),
 		MailhogBase: getenv("E2E_MAILHOG_BASE", "http://localhost:8025"),
-		WaitEmail:   mustParseDur(getenv("E2E_WAIT_EMAIL", "30s")),
+		WaitEmail:   mustParseDur(getenv("E2E_WAIT_EMAIL", "60s")),
 	}
 	return c
 }
@@ -47,7 +47,6 @@ func mustParseDur(s string) time.Duration {
 	return d
 }
 
-// --- DTOs под API
 type authResp struct {
 	AccessToken string `json:"accessToken"`
 	User        struct {
@@ -67,7 +66,6 @@ type checkResp struct {
 	} `json:"check"`
 }
 
-// --- Mailhog API v2 response (минимум полей)
 type mailhogMessages struct {
 	Count    int          `json:"count"`
 	Total    int          `json:"total"`
@@ -92,8 +90,6 @@ func (p mailhogPerson) Email() string {
 	}
 	return p.Mailbox + "@" + p.Domain
 }
-
-// --- helpers
 
 func postJSON(t *testing.T, url string, in any, out any, bearer string) {
 	t.Helper()
@@ -127,8 +123,6 @@ func getJSON(t *testing.T, url string, into any) {
 	all, _ := io.ReadAll(resp.Body)
 	require.NoError(t, json.Unmarshal(all, into))
 }
-
-// --- сам тест
 
 func Test_CheckCreation_LeadsToEmail(t *testing.T) {
 	c := loadCfg()

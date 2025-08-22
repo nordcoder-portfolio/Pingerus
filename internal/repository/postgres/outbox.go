@@ -19,20 +19,27 @@ INSERT INTO outbox (idempotency_key, data, status, kind)
 VALUES ($1, $2, 'CREATED', $3)
 ON CONFLICT (idempotency_key) DO NOTHING;`
 
-	qPick = `
+	qPickLocked = `
 WITH cand AS (
-   SELECT idempotency_key
-   FROM outbox
-   WHERE status = 'CREATED'
-      OR (status = 'IN_PROGRESS' AND updated_at < now() - $2::interval)
-   ORDER BY created_at
-   LIMIT $1
+  SELECT idempotency_key
+  FROM outbox
+  WHERE
+    status = 'CREATED'
+    OR (status = 'IN_PROGRESS' AND updated_at < now() - $2::interval)
+  ORDER BY created_at
+  FOR UPDATE SKIP LOCKED
+  LIMIT $1
 ), upd AS (
-   UPDATE outbox o
-   SET status = 'IN_PROGRESS', updated_at = now()
-   FROM cand
-   WHERE o.idempotency_key = cand.idempotency_key
-   RETURNING o.idempotency_key, o.kind, o.data, o.status, o.created_at, o.updated_at
+  UPDATE outbox o
+  SET status = 'IN_PROGRESS',
+      updated_at = now()
+  FROM cand
+  WHERE o.idempotency_key = cand.idempotency_key
+    AND (
+      o.status = 'CREATED'
+      OR (o.status = 'IN_PROGRESS' AND o.updated_at < now() - $2::interval)
+    )
+  RETURNING o.idempotency_key, o.kind, o.data, o.status, o.created_at, o.updated_at
 )
 SELECT idempotency_key, kind, data, status, created_at, updated_at
 FROM upd;`
@@ -40,7 +47,8 @@ FROM upd;`
 	qMarkSuccess = `
 UPDATE outbox
 SET status = 'SUCCESS', updated_at = now()
-WHERE idempotency_key = ANY($1);`
+WHERE idempotency_key = ANY($1)
+  AND status = 'IN_PROGRESS';`
 )
 
 func (r *OutboxRepo) Enqueue(ctx context.Context, key string, kind outbox.Kind, data []byte) error {
@@ -59,8 +67,16 @@ func (r *OutboxRepo) PickBatch(ctx context.Context, batch int, inProgressTTL tim
 	ctx, cancel := r.db.withTimeout(ctx)
 	defer cancel()
 
+	tx, err := r.db.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
 	ttl := fmt.Sprintf("%f seconds", inProgressTTL.Seconds())
-	rows, err := r.db.Pool.Query(ctx, qPick, batch, ttl)
+	rows, err := tx.Query(ctx, qPickLocked, batch, ttl)
 	if err != nil {
 		return nil, fmt.Errorf("outbox pick: %w", err)
 	}
@@ -76,7 +92,14 @@ func (r *OutboxRepo) PickBatch(ctx context.Context, batch int, inProgressTTL tim
 		m.Status = outbox.Status(status)
 		out = append(out, m)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit: %w", err)
+	}
+	return out, nil
 }
 
 func (r *OutboxRepo) MarkSuccess(ctx context.Context, keys []string) error {
@@ -85,8 +108,11 @@ func (r *OutboxRepo) MarkSuccess(ctx context.Context, keys []string) error {
 	}
 	ctx, cancel := r.db.withTimeout(ctx)
 	defer cancel()
-	if _, err := r.db.Pool.Exec(ctx, qMarkSuccess, keys); err != nil {
+
+	tag, err := r.db.Pool.Exec(ctx, qMarkSuccess, keys)
+	if err != nil {
 		return fmt.Errorf("outbox mark success: %w", err)
 	}
+	_ = tag
 	return nil
 }

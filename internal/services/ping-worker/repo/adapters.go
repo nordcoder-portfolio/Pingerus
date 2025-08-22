@@ -31,7 +31,7 @@ func (a CheckRepo) Update(ctx context.Context, c *check.Check) error {
 		UserID:     c.UserID,
 		URL:        c.URL,
 		LastStatus: c.LastStatus,
-		UpdatedAt:  time.Now().UTC(), // как и раньше
+		UpdatedAt:  time.Now().UTC(),
 		Active:     true,
 	})
 }

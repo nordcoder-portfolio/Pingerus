@@ -42,30 +42,37 @@ func New(log *zap.Logger, uc *Usecase, cfg *config.SchedCfg) *Runner {
 	}
 }
 
+func (r *Runner) tick(ctx context.Context) {
+	start := time.Now()
+	fetched, sent, errs, err := r.UC.Tick(ctx, r.Cfg.BatchLimit)
+	if err != nil {
+		r.mErr.Inc()
+		r.Log.Warn("tick error", zap.Error(err))
+	}
+	if fetched > 0 {
+		r.mFetched.Add(float64(fetched))
+		r.mSent.Add(float64(sent))
+		if errs > 0 {
+			r.mErr.Add(float64(errs))
+		}
+		r.Log.Debug("scheduled batch", zap.Int("fetched", fetched), zap.Int("sent", sent), zap.Int("errors", errs))
+
+	}
+	r.mLoopDur.Observe(time.Since(start).Seconds())
+}
+
 func (r *Runner) Run(ctx context.Context) error {
 	ticker := time.NewTicker(r.Cfg.Tick)
 	defer ticker.Stop()
+
+	r.tick(ctx)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			start := time.Now()
-			fetched, sent, errs, err := r.UC.Tick(ctx, r.Cfg.BatchLimit)
-			if err != nil {
-				r.mErr.Inc()
-				r.Log.Warn("tick error", zap.Error(err))
-			}
-			if fetched > 0 {
-				r.mFetched.Add(float64(fetched))
-				r.mSent.Add(float64(sent))
-				if errs > 0 {
-					r.mErr.Add(float64(errs))
-				}
-				r.Log.Debug("scheduled batch", zap.Int("fetched", fetched), zap.Int("sent", sent), zap.Int("errors", errs))
-			}
-			r.mLoopDur.Observe(time.Since(start).Seconds())
+			r.tick(ctx)
 		}
 	}
 }
