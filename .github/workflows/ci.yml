@@ -190,15 +190,14 @@ jobs:
             echo "tag=main" >> $GITHUB_OUTPUT
           fi
 
-      - name: Derive registry path (lowercase)
+      - name: Derive image path (lowercase)
         id: img
         shell: bash
         run: |
           owner_lc="${GITHUB_REPOSITORY_OWNER,,}"
           repo="${GITHUB_REPOSITORY#*/}"
           repo_lc="${repo,,}"
-          echo "owner=${owner_lc}" >> $GITHUB_OUTPUT
-          echo "repo=${repo_lc}"   >> $GITHUB_OUTPUT
+          echo "path=ghcr.io/${owner_lc}/${repo_lc}" >> $GITHUB_OUTPUT
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -213,10 +212,11 @@ jobs:
           files: ./docker-bake.hcl
           push: true
           set: |
-            registry=ghcr.io
-            owner=${{ steps.img.outputs.owner }}
-            repo=${{ steps.img.outputs.repo }}
-            tag=${{ steps.vars.outputs.tag }}
+            migrator.tags=${{ steps.img.outputs.path }}/migrator:${{ steps.vars.outputs.tag }}
+            api-gateway.tags=${{ steps.img.outputs.path }}/api-gateway:${{ steps.vars.outputs.tag }}
+            scheduler.tags=${{ steps.img.outputs.path }}/scheduler:${{ steps.vars.outputs.tag }}
+            ping-worker.tags=${{ steps.img.outputs.path }}/ping-worker:${{ steps.vars.outputs.tag }}
+            email-notifier.tags=${{ steps.img.outputs.path }}/email-notifier:${{ steps.vars.outputs.tag }}
 
   deploy-prod:
     if: github.ref_type == 'tag' || github.ref_name == 'refs/heads/main'
