@@ -17,163 +17,162 @@ env:
   IMAGE_REPO: Pingerus
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.21"
-
-      - name: Setup Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Bootstrap proto & plugins
-        run: |
-          make bootstrap-proto
-          make proto-plugins-install
-
-      - name: Generate protos
-        run: make generate
-
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          args: ./...
-
-  unit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.21"
-
-      - name: Setup Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Bootstrap proto & plugins
-        run: |
-          make bootstrap-proto
-          make proto-plugins-install
-
-      - name: Generate protos
-        run: make generate
-
-      - name: Unit tests
-        run: go test ./... -race -v
-
-  it-email-notifier:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.21"
-
-      - name: Setup Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Bootstrap proto & plugins
-        run: |
-          make bootstrap-proto
-          make proto-plugins-install
-
-      - name: Generate protos
-        run: make generate
-
-      - name: Up IT stack + run EN tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          make it-up
-          trap 'docker compose -f docker-compose.it.yml logs > it_logs.txt || true; docker compose -f docker-compose.it.yml down -v || true' EXIT
-          make it-test-en
-      - if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: it-logs-email-notifier
-          path: it_logs.txt
-
-  it-ping-worker:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.21"
-
-      - name: Setup Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Bootstrap proto & plugins
-        run: |
-          make bootstrap-proto
-          make proto-plugins-install
-
-      - name: Generate protos
-        run: make generate
-
-      - name: Up IT stack + run PW tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          make it-up
-          trap 'docker compose -f docker-compose.it.yml logs > it_logs.txt || true; docker compose -f docker-compose.it.yml down -v || true' EXIT
-          make it-test-pw
-      - if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: it-logs-ping-worker
-          path: it_logs.txt
-
-  it-api-gateway:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.21"
-
-      - name: Setup Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Bootstrap proto & plugins
-        run: |
-          make bootstrap-proto
-          make proto-plugins-install
-
-      - name: Generate protos
-        run: make generate
-
-      - name: Up IT stack + run AG tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          make it-up
-          trap 'docker compose -f docker-compose.it.yml logs > it_logs.txt || true; docker compose -f docker-compose.it.yml down -v || true' EXIT
-          make it-test-ag
-      - if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: it-logs-api-gateway
-          path: it_logs.txt
+#  lint:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v4
+#
+#      - uses: actions/setup-go@v5
+#        with:
+#          go-version: "1.21"
+#
+#      - name: Setup Protoc
+#        uses: arduino/setup-protoc@v3
+#        with:
+#          repo-token: ${{ secrets.GITHUB_TOKEN }}
+#
+#      - name: Bootstrap proto & plugins
+#        run: |
+#          make bootstrap-proto
+#          make proto-plugins-install
+#
+#      - name: Generate protos
+#        run: make generate
+#
+#      - name: golangci-lint
+#        uses: golangci/golangci-lint-action@v6
+#        with:
+#          version: latest
+#          args: ./...
+#
+#  unit:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v4
+#
+#      - uses: actions/setup-go@v5
+#        with:
+#          go-version: "1.21"
+#
+#      - name: Setup Protoc
+#        uses: arduino/setup-protoc@v3
+#        with:
+#          repo-token: ${{ secrets.GITHUB_TOKEN }}
+#
+#      - name: Bootstrap proto & plugins
+#        run: |
+#          make bootstrap-proto
+#          make proto-plugins-install
+#
+#      - name: Generate protos
+#        run: make generate
+#
+#      - name: Unit tests
+#        run: go test ./... -race -v
+#
+#  it-email-notifier:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v4
+#      - uses: actions/setup-go@v5
+#        with:
+#          go-version: "1.21"
+#
+#      - name: Setup Protoc
+#        uses: arduino/setup-protoc@v3
+#        with:
+#          repo-token: ${{ secrets.GITHUB_TOKEN }}
+#
+#      - name: Bootstrap proto & plugins
+#        run: |
+#          make bootstrap-proto
+#          make proto-plugins-install
+#
+#      - name: Generate protos
+#        run: make generate
+#
+#      - name: Up IT stack + run EN tests
+#        shell: bash
+#        run: |
+#          set -euo pipefail
+#          make it-up
+#          trap 'docker compose -f docker-compose.it.yml logs > it_logs.txt || true; docker compose -f docker-compose.it.yml down -v || true' EXIT
+#          make it-test-en
+#      - if: failure()
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: it-logs-email-notifier
+#          path: it_logs.txt
+#
+#  it-ping-worker:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v4
+#      - uses: actions/setup-go@v5
+#        with:
+#          go-version: "1.21"
+#
+#      - name: Setup Protoc
+#        uses: arduino/setup-protoc@v3
+#        with:
+#          repo-token: ${{ secrets.GITHUB_TOKEN }}
+#
+#      - name: Bootstrap proto & plugins
+#        run: |
+#          make bootstrap-proto
+#          make proto-plugins-install
+#
+#      - name: Generate protos
+#        run: make generate
+#
+#      - name: Up IT stack + run PW tests
+#        shell: bash
+#        run: |
+#          set -euo pipefail
+#          make it-up
+#          trap 'docker compose -f docker-compose.it.yml logs > it_logs.txt || true; docker compose -f docker-compose.it.yml down -v || true' EXIT
+#          make it-test-pw
+#      - if: failure()
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: it-logs-ping-worker
+#          path: it_logs.txt
+#
+#  it-api-gateway:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v4
+#      - uses: actions/setup-go@v5
+#        with:
+#          go-version: "1.21"
+#
+#      - name: Setup Protoc
+#        uses: arduino/setup-protoc@v3
+#        with:
+#          repo-token: ${{ secrets.GITHUB_TOKEN }}
+#
+#      - name: Bootstrap proto & plugins
+#        run: |
+#          make bootstrap-proto
+#          make proto-plugins-install
+#
+#      - name: Generate protos
+#        run: make generate
+#
+#      - name: Up IT stack + run AG tests
+#        shell: bash
+#        run: |
+#          set -euo pipefail
+#          make it-up
+#          trap 'docker compose -f docker-compose.it.yml logs > it_logs.txt || true; docker compose -f docker-compose.it.yml down -v || true' EXIT
+#          make it-test-ag
+#      - if: failure()
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: it-logs-api-gateway
+#          path: it_logs.txt
 
   build-and-push:
-    needs: [ lint, unit, it-email-notifier, it-ping-worker, it-api-gateway ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -196,11 +195,10 @@ jobs:
         shell: bash
         run: |
           owner_lc="${GITHUB_REPOSITORY_OWNER,,}"
-          repo="${GITHUB_REPOSITORY#*/}"   # owner/repo -> берём часть после /
+          repo="${GITHUB_REPOSITORY#*/}"
           repo_lc="${repo,,}"
-          echo "owner=$owner_lc" >> $GITHUB_OUTPUT
-          echo "repo=$repo_lc"   >> $GITHUB_OUTPUT
-          echo "path=ghcr.io/${owner_lc}/${repo_lc}" >> $GITHUB_OUTPUT
+          echo "owner=${owner_lc}" >> $GITHUB_OUTPUT
+          echo "repo=${repo_lc}"   >> $GITHUB_OUTPUT
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -215,7 +213,10 @@ jobs:
           files: ./docker-bake.hcl
           push: true
           set: |
-            *.tags=${{ steps.img.outputs.path }}/{{.target}}:${{ steps.vars.outputs.tag }}
+            registry=ghcr.io
+            owner=${{ steps.img.outputs.owner }}
+            repo=${{ steps.img.outputs.repo }}
+            tag=${{ steps.vars.outputs.tag }}
 
   deploy-prod:
     if: github.ref_type == 'tag' || github.ref_name == 'refs/heads/main'

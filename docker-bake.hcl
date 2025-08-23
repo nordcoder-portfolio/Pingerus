@@ -2,7 +2,12 @@ group "default" {
   targets = ["migrator", "api-gateway", "scheduler", "ping-worker", "email-notifier"]
 }
 
-variable "context" { default = "." }
+variable "registry"    { default = "ghcr.io" }
+variable "owner"       { default = "nordcoder-repo" }
+variable "repo"        { default = "pingerus" }
+variable "tag"         { default = "main" }
+
+variable "context"     { default = "." }
 
 target "base" {
   context = "${context}"
@@ -11,29 +16,29 @@ target "base" {
 target "migrator" {
   inherits   = ["base"]
   dockerfile = "cmd/migrator/Dockerfile"
-  tags       = ["migrator:local"]
+  tags       = ["${registry}/${owner}/${repo}/migrator:${tag}"]
 }
 
 target "api-gateway" {
   inherits   = ["base"]
   dockerfile = "cmd/api-gateway/Dockerfile"
-  tags       = ["api-gateway:local"]
+  tags       = ["${registry}/${owner}/${repo}/api-gateway:${tag}"]
 }
 
 target "scheduler" {
   inherits   = ["base"]
   dockerfile = "cmd/scheduler/Dockerfile"
-  tags       = ["scheduler:local"]
+  tags       = ["${registry}/${owner}/${repo}/scheduler:${tag}"]
 }
 
 target "ping-worker" {
   inherits   = ["base"]
   dockerfile = "cmd/ping-worker/Dockerfile"
-  tags       = ["ping-worker:local"]
+  tags       = ["${registry}/${owner}/${repo}/ping-worker:${tag}"]
 }
 
 target "email-notifier" {
   inherits   = ["base"]
   dockerfile = "cmd/email-notifier/Dockerfile"
-  tags       = ["email-notifier:local"]
+  tags       = ["${registry}/${owner}/${repo}/email-notifier:${tag}"]
 }
