@@ -173,7 +173,7 @@ jobs:
           path: it_logs.txt
 
   build-and-push:
-    needs: [lint, unit, it-email-notifier, it-ping-worker, it-api-gateway]
+    needs: [ lint, unit, it-email-notifier, it-ping-worker, it-api-gateway ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -191,10 +191,21 @@ jobs:
             echo "tag=main" >> $GITHUB_OUTPUT
           fi
 
+      - name: Derive registry path (lowercase)
+        id: img
+        shell: bash
+        run: |
+          owner_lc="${GITHUB_REPOSITORY_OWNER,,}"
+          repo="${GITHUB_REPOSITORY#*/}"   # owner/repo -> берём часть после /
+          repo_lc="${repo,,}"
+          echo "owner=$owner_lc" >> $GITHUB_OUTPUT
+          echo "repo=$repo_lc"   >> $GITHUB_OUTPUT
+          echo "path=ghcr.io/${owner_lc}/${repo_lc}" >> $GITHUB_OUTPUT
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -204,7 +215,7 @@ jobs:
           files: ./docker-bake.hcl
           push: true
           set: |
-            *.tags=${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_REPO }}/{{.target}}:${{ steps.vars.outputs.tag }}
+            *.tags=${{ steps.img.outputs.path }}/{{.target}}:${{ steps.vars.outputs.tag }}
 
   deploy-prod:
     if: github.ref_type == 'tag' || github.ref_name == 'refs/heads/main'
