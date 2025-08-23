@@ -92,6 +92,22 @@ generate: bootstrap-all
 	  $(shell find $(PROTO_DIR) -name '*.proto')
 	@echo "Protobuf generated"
 
+.PHONY: proto-plugins-install
+proto-plugins-install:
+	GO111MODULE=on GOBIN=$(shell go env GOPATH)/bin go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	GO111MODULE=on GOBIN=$(shell go env GOPATH)/bin go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+	GO111MODULE=on GOBIN=$(shell go env GOPATH)/bin go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@latest
+	GO111MODULE=on GOBIN=$(shell go env GOPATH)/bin go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@latest
+	GO111MODULE=on GOBIN=$(shell go env GOPATH)/bin go install github.com/envoyproxy/protoc-gen-validate@latest
+
+.PHONY: ci-bootstrap
+ci-bootstrap: bootstrap-proto proto-plugins-install
+	@echo "ci bootstrap done"
+
+.PHONY: test
+test: generate
+	@echo "▶ running unit tests"
+	@$(GO) test ./... -race -v
 
 .PHONY: lint
 lint:

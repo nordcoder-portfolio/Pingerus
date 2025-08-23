@@ -13,32 +13,84 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_OWNER: nordcoder-portfolio
-  IMAGE_REPO: Pingerus
+  IMAGE_OWNER: OWNER
+  IMAGE_REPO: REPO
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-go@v5
-        with: { go-version: "1.21" }
-      - run: make lint
+        with:
+          go-version: "1.21"
+
+      - name: Setup Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bootstrap proto & plugins
+        run: |
+          make bootstrap-proto
+          make proto-plugins-install
+
+      - name: Generate protos
+        run: make generate
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: ./...
 
   unit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-go@v5
-        with: { go-version: "1.21" }
-      - run: make test
+        with:
+          go-version: "1.21"
+
+      - name: Setup Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bootstrap proto & plugins
+        run: |
+          make bootstrap-proto
+          make proto-plugins-install
+
+      - name: Generate protos
+        run: make generate
+
+      - name: Unit tests
+        run: go test ./... -race -v
 
   it-email-notifier:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: "1.21" }
+        with:
+          go-version: "1.21"
+
+      - name: Setup Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bootstrap proto & plugins
+        run: |
+          make bootstrap-proto
+          make proto-plugins-install
+
+      - name: Generate protos
+        run: make generate
+
       - name: Up IT stack + run EN tests
         shell: bash
         run: |
@@ -57,7 +109,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: "1.21" }
+        with:
+          go-version: "1.21"
+
+      - name: Setup Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bootstrap proto & plugins
+        run: |
+          make bootstrap-proto
+          make proto-plugins-install
+
+      - name: Generate protos
+        run: make generate
+
       - name: Up IT stack + run PW tests
         shell: bash
         run: |
@@ -76,7 +143,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: "1.21" }
+        with:
+          go-version: "1.21"
+
+      - name: Setup Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bootstrap proto & plugins
+        run: |
+          make bootstrap-proto
+          make proto-plugins-install
+
+      - name: Generate protos
+        run: make generate
+
       - name: Up IT stack + run AG tests
         shell: bash
         run: |
@@ -119,8 +201,7 @@ jobs:
       - name: Build & push images (bake)
         uses: docker/bake-action@v5
         with:
-          files: |
-            ./docker-bake.hcl
+          files: ./docker-bake.hcl
           push: true
           set: |
             *.tags=${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_REPO }}/{{.target}}:${{ steps.vars.outputs.tag }}
@@ -155,9 +236,5 @@ jobs:
             export TAG='${{ steps.vars.outputs.tag }}'
             export OWNER='${{ env.IMAGE_OWNER }}'
             export REPO='${{ env.IMAGE_REPO }}'
-
-            # логин в GHCR через GitHub Actions токен
             docker login ghcr.io -u '${{ github.actor }}' -p '${{ secrets.GITHUB_TOKEN }}'
-
-            # деплой через твой скрипт
             /opt/pingerus/deploy.sh "${TAG}"
