@@ -2,12 +2,11 @@ group "default" {
   targets = ["migrator", "api-gateway", "scheduler", "ping-worker", "email-notifier"]
 }
 
-variable "registry"    { default = "ghcr.io" }
-variable "owner"       { default = "nordcoder-repo" }
-variable "repo"        { default = "pingerus" }
-variable "tag"         { default = "main" }
-
-variable "context"     { default = "." }
+variable "registry" { default = "ghcr.io" }
+variable "owner"    { default = "" }
+variable "repo"     { default = "" }
+variable "tag"      { default = "main" }
+variable "context"  { default = "." }
 
 target "base" {
   context = "${context}"
