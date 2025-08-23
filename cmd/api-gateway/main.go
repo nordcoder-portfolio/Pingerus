@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"google.golang.org/grpc/connectivity"
 	"net"
 	"net/http"
 	"os"
@@ -27,6 +28,29 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 )
+
+func dialGRPCBlocking(ctx context.Context, target string) (*grpc.ClientConn, error) {
+	conn, err := grpc.NewClient(
+		target,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	conn.Connect()
+
+	for {
+		state := conn.GetState()
+		if state == connectivity.Ready {
+			return conn, nil
+		}
+		if ok := conn.WaitForStateChange(ctx, state); !ok {
+			_ = conn.Close()
+			return nil, context.DeadlineExceeded
+		}
+	}
+}
 
 func main() {
 	cfg, err := config.Load("../config/api-gateway.yaml")
@@ -128,12 +152,7 @@ func main() {
 
 	dialCtx, dialCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer dialCancel()
-	conn, err := grpc.DialContext(
-		dialCtx,
-		cfg.Server.GRPCAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
-	)
+	conn, err := dialGRPCBlocking(dialCtx, cfg.Server.GRPCAddr)
 	if err != nil {
 		logger.Fatal("grpc dial for gateway", zap.Error(err))
 	}

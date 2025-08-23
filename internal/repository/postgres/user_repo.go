@@ -45,7 +45,7 @@ RETURNING id, email, password_hash, created_at, updated_at;`
 )
 
 func (r *UserRepo) Create(ctx context.Context, u *user.User) error {
-	ctx, cancel := r.db.withTimeout(context.Background())
+	ctx, cancel := r.db.withTimeout(ctx)
 	defer cancel()
 
 	if err := r.db.Pool.QueryRow(ctx, qUserInsert, u.Email, u.Password).
@@ -60,7 +60,7 @@ func (r *UserRepo) Create(ctx context.Context, u *user.User) error {
 }
 
 func (r *UserRepo) GetByID(ctx context.Context, id int64) (*user.User, error) {
-	ctx, cancel := r.db.withTimeout(context.Background())
+	ctx, cancel := r.db.withTimeout(ctx)
 	defer cancel()
 
 	var u user.User
@@ -71,7 +71,7 @@ func (r *UserRepo) GetByID(ctx context.Context, id int64) (*user.User, error) {
 }
 
 func (r *UserRepo) GetByEmail(ctx context.Context, email string) (*user.User, error) {
-	ctx, cancel := r.db.withTimeout(context.Background())
+	ctx, cancel := r.db.withTimeout(ctx)
 	defer cancel()
 
 	var u user.User
@@ -82,7 +82,7 @@ func (r *UserRepo) GetByEmail(ctx context.Context, email string) (*user.User, er
 }
 
 func (r *UserRepo) Update(ctx context.Context, u *user.User) error {
-	ctx, cancel := r.db.withTimeout(context.Background())
+	ctx, cancel := r.db.withTimeout(ctx)
 	defer cancel()
 
 	if err := r.db.Pool.QueryRow(ctx, qUserUpdate, u.ID, u.Email, u.Password).

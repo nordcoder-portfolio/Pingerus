@@ -83,7 +83,7 @@ func scanFull(row pgx.Row, c *check.Check) error {
 }
 
 func (r *CheckRepoImpl) Create(ctx context.Context, c *check.Check) error {
-	ctx, cancel := r.db.withTimeout(context.Background())
+	ctx, cancel := r.db.withTimeout(ctx)
 	defer cancel()
 
 	intervalSec := int(c.Interval / time.Second)
@@ -96,7 +96,7 @@ func (r *CheckRepoImpl) Create(ctx context.Context, c *check.Check) error {
 }
 
 func (r *CheckRepoImpl) GetByID(ctx context.Context, id int64) (*check.Check, error) {
-	ctx, cancel := r.db.withTimeout(context.Background())
+	ctx, cancel := r.db.withTimeout(ctx)
 	defer cancel()
 
 	var c check.Check
@@ -107,7 +107,7 @@ func (r *CheckRepoImpl) GetByID(ctx context.Context, id int64) (*check.Check, er
 }
 
 func (r *CheckRepoImpl) ListByUser(ctx context.Context, userID int64) ([]*check.Check, error) {
-	ctx, cancel := r.db.withTimeout(context.Background())
+	ctx, cancel := r.db.withTimeout(ctx)
 	defer cancel()
 
 	rows, err := r.db.Pool.Query(ctx, qListByUser, userID)
@@ -145,7 +145,7 @@ WHERE id = $1;`
 }
 
 func (r *CheckRepoImpl) Delete(ctx context.Context, id int64) error {
-	ctx, cancel := r.db.withTimeout(context.Background())
+	ctx, cancel := r.db.withTimeout(ctx)
 	defer cancel()
 
 	cmd, err := r.db.Pool.Exec(ctx, qDelete, id)
@@ -162,7 +162,7 @@ func (r *CheckRepoImpl) FetchDue(ctx context.Context, limit int) ([]*check.Check
 	if limit <= 0 {
 		limit = 100
 	}
-	ctx, cancel := r.db.withTimeout(context.Background())
+	ctx, cancel := r.db.withTimeout(ctx)
 	defer cancel()
 
 	tx, err := r.db.Pool.Begin(ctx)

@@ -29,7 +29,7 @@ LIMIT $2;
 )
 
 func (r *NotificationRepoImpl) Create(ctx context.Context, n *notification.Notification) error {
-	ctx, cancel := r.db.withTimeout(context.Background())
+	ctx, cancel := r.db.withTimeout(ctx)
 	defer cancel()
 
 	if err := r.db.Pool.QueryRow(ctx, qNotifInsert,
@@ -49,7 +49,7 @@ func (r *NotificationRepoImpl) ListByUser(ctx context.Context, userID int64, lim
 		limit = 50
 	}
 
-	ctx, cancel := r.db.withTimeout(context.Background())
+	ctx, cancel := r.db.withTimeout(ctx)
 	defer cancel()
 
 	rows, err := r.db.Pool.Query(ctx, qNotifByUser, userID, limit)

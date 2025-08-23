@@ -93,9 +93,7 @@ func (h *Handler) HandleCheck(ctx context.Context, checkID int64) error {
 			}
 			return nil
 		}); err != nil {
-			// todo log
-		} else {
-			// todo log
+			fmt.Println("pain") // todo withlogger and logging
 		}
 	}
 

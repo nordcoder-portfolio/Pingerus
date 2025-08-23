@@ -31,13 +31,8 @@ func (r *RunRepoImpl) Insert(ctx context.Context, run *run.Run) error {
 	ctx, cancel := r.db.withTimeout(ctx)
 	defer cancel()
 
-	q := `
-INSERT INTO runs (check_id, ts, status, code, latency_ms)
-VALUES ($1,$2,$3,$4,$5)
-RETURNING id;`
-
 	eq := r.db.execQueryer(ctx)
-	return eq.QueryRow(ctx, q,
+	return eq.QueryRow(ctx, qRunInsert,
 		run.CheckID, run.Timestamp, run.Status, run.Code, run.Latency,
 	).Scan(&run.ID)
 }
@@ -47,7 +42,7 @@ func (r *RunRepoImpl) ListByCheck(ctx context.Context, checkID int64, limit int)
 		limit = 50
 	}
 
-	ctx, cancel := r.db.withTimeout(context.Background())
+	ctx, cancel := r.db.withTimeout(ctx)
 	defer cancel()
 
 	rows, err := r.db.Pool.Query(ctx, qRunsByCheck, checkID, limit)
