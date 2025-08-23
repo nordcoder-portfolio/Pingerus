@@ -13,8 +13,8 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_OWNER: OWNER
-  IMAGE_REPO: REPO
+  IMAGE_OWNER: nordcoder-portfolio
+  IMAGE_REPO: Pingerus
 
 jobs:
   lint:

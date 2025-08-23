@@ -30,7 +30,7 @@ func main() {
 		logCfg = zap.NewDevelopmentConfig()
 	}
 	log, _ := logCfg.Build()
-	defer log.Sync()
+	defer func() { _ = log.Sync() }()
 	log = log.With(zap.String("service", "scheduler"))
 
 	ctx := context.Background()
@@ -43,7 +43,7 @@ func main() {
 	if err != nil {
 		log.Fatal("otel init", zap.Error(err))
 	}
-	defer otelCloser.Shutdown(context.Background())
+	defer func() { err = otelCloser.Shutdown(context.Background()) }()
 
 	db, err := pg.NewDB(ctx, cfg.DB)
 	if err != nil {
@@ -55,7 +55,7 @@ func main() {
 
 	kafkaProd := kafkaRepo.NewProducer(cfg.Kafka.Brokers, cfg.Kafka.Topic)
 	publisher := kafkaRepo.NewCheckEventsKafka(kafkaProd)
-	defer kafkaProd.Close()
+	defer func() { _ = kafkaProd.Close() }()
 
 	ms := obs.CreateMetricsServer(cfg.Sched.MetricsAddr, func(ctx context.Context) error {
 		hctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)

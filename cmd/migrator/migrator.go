@@ -21,7 +21,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := goose.Up(db, dir); err != nil {
 		log.Fatalf("migrate up: %v", err)

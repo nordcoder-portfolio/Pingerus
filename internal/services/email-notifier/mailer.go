@@ -23,17 +23,6 @@ type Mailer struct {
 	log *zap.Logger
 }
 
-func NewSMTPMailerForTests(addr string) *Mailer {
-	return &Mailer{
-		addr:       addr,
-		auth:       nil,
-		useTLS:     false,
-		timeout:    5 * time.Second,
-		from:       "noreply@pingerus.dev",
-		subjPrefix: "[Pingerus]",
-	}
-}
-
 func New(cfg config.SMTP) *Mailer {
 	var auth smtp.Auth
 	if cfg.User != "" || cfg.Password != "" {
@@ -92,7 +81,7 @@ func (m *Mailer) Send(ctx context.Context, to, subject, body string) error {
 			log.Error("smtp client failed", zap.Error(err))
 			return err
 		}
-		defer c.Close()
+		defer func() { _ = c.Close() }()
 
 		if m.auth != nil {
 			if ok, _ := c.Extension("AUTH"); ok {

@@ -34,7 +34,7 @@ func main() {
 		logCfg = zap.NewDevelopmentConfig()
 	}
 	log, _ := logCfg.Build()
-	defer log.Sync()
+	defer func() { _ = log.Sync() }()
 	log = log.With(zap.String("service", "email-notifier"))
 
 	log.Info("starting email-notifier",
@@ -53,7 +53,7 @@ func main() {
 	if err != nil {
 		log.Warn("otel init", zap.Error(err))
 	}
-	defer otelCloser.Shutdown(context.Background())
+	defer func() { _ = otelCloser.Shutdown(context.Background()) }()
 
 	db, err := pg.NewDB(rootCtx, cfg.DB)
 	if err != nil {
@@ -74,7 +74,7 @@ func main() {
 	}, log)
 
 	cons := kafka.NewConsumer(cfg.In.Brokers, cfg.In.GroupID, cfg.In.Topic).WithLogger(log)
-	defer cons.Close()
+	defer func() { _ = cons.Close() }()
 	log.Info("kafka consumer initialized",
 		zap.Strings("brokers", cfg.In.Brokers),
 		zap.String("group_id", cfg.In.GroupID),

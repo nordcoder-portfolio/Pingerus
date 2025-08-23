@@ -22,7 +22,7 @@ type transactorImpl struct {
 	logger *zap.Logger
 }
 
-func NewTransactor(db *DB, logger *zap.Logger) *transactorImpl {
+func NewTransactor(db *DB, logger *zap.Logger) Transactor {
 	return &transactorImpl{
 		db:     db,
 		logger: logger,

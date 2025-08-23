@@ -41,7 +41,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer logger.Sync()
+	defer func() { _ = logger.Sync() }()
 	logger.Info("starting api-gateway", zap.Any("env", cfg.App.Env))
 
 	ctx := context.Background()
@@ -52,7 +52,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("otel init", zap.Error(err))
 	}
-	defer otelCloser.Shutdown(context.Background())
+	defer func() { _ = otelCloser.Shutdown(context.Background()) }()
 
 	db, err := pg.NewDB(ctx, pg.Config{
 		DSN:               cfg.DB.DSN,
@@ -137,7 +137,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("grpc dial for gateway", zap.Error(err))
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	mux := runtime.NewServeMux()
 	if err := pb.RegisterCheckServiceHandler(context.Background(), mux, conn); err != nil {

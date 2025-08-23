@@ -2,13 +2,13 @@ package auth
 
 import (
 	"crypto/hmac"
+	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/NordCoder/Pingerus/internal/domain/auth"
-	"math/rand"
 	"strings"
 	"time"
 )
@@ -69,7 +69,7 @@ func SignedString(c auth.AccessClaims, secret []byte) (string, error) {
 
 func GenerateRawToken(nBytes int) (raw string, err error) {
 	b := make([]byte, nBytes)
-	if _, err = rand.Read(b); err != nil {
+	if _, err = crand.Read(b); err != nil {
 		return "", err
 	}
 	raw = base64.RawURLEncoding.EncodeToString(b)

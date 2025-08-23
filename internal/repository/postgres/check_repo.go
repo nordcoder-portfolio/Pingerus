@@ -38,18 +38,6 @@ WHERE user_id = $1
 ORDER BY id DESC;
 `
 
-	qUpdate = `
-UPDATE checks
-SET host = $2,
-    interval_sec = $3,
-    last_status  = $4,
-    next_run     = COALESCE($5, next_run),
-    active       = $6,
-    updated_at   = NOW()
-WHERE id = $1
-RETURNING id, user_id, host, interval_sec, last_status, next_run, created_at, updated_at, active;
-`
-
 	qDelete = `DELETE FROM checks WHERE id = $1;`
 
 	qFetchDue = `
@@ -181,7 +169,7 @@ func (r *CheckRepoImpl) FetchDue(ctx context.Context, limit int) ([]*check.Check
 	if err != nil {
 		return nil, fmt.Errorf("begin: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	rows, err := tx.Query(ctx, qFetchDue, limit)
 	if err != nil {

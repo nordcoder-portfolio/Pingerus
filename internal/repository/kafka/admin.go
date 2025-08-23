@@ -34,7 +34,7 @@ func EnsureTopic(ctx context.Context, brokers []string, spec TopicSpec, log *zap
 		}
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	controller, err := conn.Controller()
 	if err != nil {
@@ -50,7 +50,7 @@ func EnsureTopic(ctx context.Context, brokers []string, spec TopicSpec, log *zap
 		}
 		return err
 	}
-	defer cc.Close()
+	defer func() { _ = cc.Close() }()
 
 	err = cc.CreateTopics(kafka.TopicConfig{
 		Topic:             spec.Name,

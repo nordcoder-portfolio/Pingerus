@@ -7,12 +7,6 @@ import (
 
 type Status string
 
-const (
-	StatusCreated   Status = "CREATED"
-	StatusInProcess Status = "IN_PROGRESS"
-	StatusSuccess   Status = "SUCCESS"
-)
-
 type Kind int
 
 const (

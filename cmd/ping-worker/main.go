@@ -36,20 +36,20 @@ func main() {
 		logCfg = zap.NewDevelopmentConfig()
 	}
 	log, _ := logCfg.Build()
-	defer log.Sync()
+	defer func() { _ = log.Sync() }()
 	log = log.With(zap.String("service", "ping-worker"))
 
 	root := context.Background()
-	//otelCloser, err := obs.SetupOTel(root, obs.OTELConfig{
-	//	Enable:      true,
-	//	Endpoint:    "",
-	//	ServiceName: "ping-worker",
-	//	SampleRatio: 1.0,
-	//})
-	//if err != nil {
-	//	log.Fatal("otel init", zap.Error(err))
-	//}
-	//defer otelCloser.Shutdown(context.Background())
+	otelCloser, err := obs.SetupOTel(root, obs.OTELConfig{
+		Enable:      true,
+		Endpoint:    "",
+		ServiceName: "ping-worker",
+		SampleRatio: 1.0,
+	})
+	if err != nil {
+		log.Fatal("otel init", zap.Error(err))
+	}
+	defer func() { _ = otelCloser.Shutdown(context.Background()) }()
 
 	db, err := pg.NewDB(root, cfg.DB)
 	if err != nil {
@@ -68,10 +68,10 @@ func main() {
 	}, log)
 
 	cons := kafka.NewConsumer(cfg.In.Brokers, cfg.In.GroupID, cfg.In.Topic)
-	defer cons.Close()
+	defer func() { _ = cons.Close() }()
 
 	prod := kafka.NewProducer(cfg.Out.Brokers, cfg.Out.Topic).WithLogger(log)
-	defer prod.Close()
+	defer func() { _ = prod.Close() }()
 
 	events := kafka.NewCheckEventsKafka(prod)
 
