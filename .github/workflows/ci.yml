@@ -6,6 +6,7 @@ on:
     tags: ["v*"]
   pull_request:
     branches: ["main"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -245,7 +246,7 @@ jobs:
             email-notifier.tags=${{ steps.img.outputs.path }}/email-notifier:${{ steps.vars.outputs.tag }}
 
   deploy-prod:
-    if: github.ref_type == 'tag' || github.ref_name == 'refs/heads/main'
+    if: ${{ github.event_name == 'workflow_dispatch' || github.ref_type == 'tag' || github.ref_name == 'main' }}
     needs: [build-and-push]
     runs-on: ubuntu-latest
     environment: prod
