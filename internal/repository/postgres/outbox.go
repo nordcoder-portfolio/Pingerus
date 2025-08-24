@@ -91,7 +91,7 @@ func (r *OutboxRepo) PickBatch(ctx context.Context, batch int, inProgressTTL tim
 	for rows.Next() {
 		var m outbox.Message
 		var status string
-		if err := rows.Scan(&m.IdempotencyKey, &m.Kind, &m.Data, &status, &m.CreatedAt, &m.UpdatedAt, m.Traceparent, m.Tracestate, m.Baggage); err != nil {
+		if err := rows.Scan(&m.IdempotencyKey, &m.Kind, &m.Data, &status, &m.CreatedAt, &m.UpdatedAt, &m.Traceparent, &m.Tracestate, &m.Baggage); err != nil {
 			return nil, fmt.Errorf("outbox scan: %w", err)
 		}
 		m.Status = outbox.Status(status)
