@@ -3,6 +3,11 @@ version: "3.9"
 networks:
   pingerus-it:
 
+volumes:
+  prom-data:
+  loki-data:
+  tempo-data:
+
 services:
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v23.3.17
