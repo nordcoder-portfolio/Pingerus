@@ -28,6 +28,11 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("sched.batch_limit", 100)
 	v.SetDefault("sched.metrics_addr", ":8082")
 
+	v.SetDefault("otel.enable", false)
+	v.SetDefault("otel.service_name", "scheduler")
+	v.SetDefault("otel.sample_ratio", 1.0)
+	v.SetDefault("otel.otlp_endpoint", "localhost:4317")
+
 	v.SetDefault("log_level", "info")
 
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))

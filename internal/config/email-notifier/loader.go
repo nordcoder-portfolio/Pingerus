@@ -31,6 +31,11 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("smtp.timeout", "5s")
 	v.SetDefault("smtp.subj_prefix", "[Pingerus]")
 
+	v.SetDefault("otel.enable", false)
+	v.SetDefault("otel.service_name", "email-notifier")
+	v.SetDefault("otel.sample_ratio", 1.0)
+	v.SetDefault("otel.otlp_endpoint", "localhost:4317")
+
 	v.SetDefault("server.metrics_addr", ":8084")
 	v.SetDefault("log_level", "info")
 

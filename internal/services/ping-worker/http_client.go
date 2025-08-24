@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	config "github.com/NordCoder/Pingerus/internal/config/ping-worker"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"net"
 	"net/http"
 	"time"
@@ -37,7 +38,7 @@ func New(cfg config.HTTPPing) *Client {
 			MinVersion:         tls.VersionTLS12,
 		},
 	}
-	client := &http.Client{Timeout: cfg.Timeout, Transport: transport}
+	client := &http.Client{Timeout: cfg.Timeout, Transport: otelhttp.NewTransport(transport)}
 	if !cfg.FollowRedirects {
 		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse

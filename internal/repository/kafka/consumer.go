@@ -3,10 +3,14 @@ package kafka
 import (
 	"context"
 	"errors"
+	"github.com/segmentio/kafka-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
+	"go.opentelemetry.io/otel/trace"
 	"io"
 	"time"
 
-	"github.com/segmentio/kafka-go"
 	"go.uber.org/zap"
 )
 
@@ -127,9 +131,27 @@ func (c *Consumer) Consume(ctx context.Context, h Handler) error {
 
 		backoff = 200 * time.Millisecond
 
-		if err := h(ctx, msg.Key, msg.Value); err != nil {
+		prop := otel.GetTextMapPropagator()
+		parent := prop.Extract(context.Background(), mapCarrierFromKafka(msg.Headers))
+
+		tr := otel.Tracer("kafka.consumer")
+		ctxCons, cons := tr.Start(parent, "kafka.consume "+msg.Topic, trace.WithSpanKind(trace.SpanKindConsumer),
+			trace.WithAttributes(
+				semconv.MessagingSystemKafka,
+				semconv.MessagingDestinationName(msg.Topic),
+				semconv.MessagingOperationReceive,
+				attribute.Int("kafka.partition", msg.Partition),
+				attribute.Int64("kafka.offset", msg.Offset),
+			),
+		)
+		cons.End()
+
+		ctxProc, span := tr.Start(ctxCons, "process "+msg.Topic)
+
+		if err := h(ctxProc, msg.Key, msg.Value); err != nil {
 			log.Error("handler error", zap.Int("partition", msg.Partition),
 				zap.Int64("offset", msg.Offset), zap.Error(err))
+			span.End()
 			continue
 		}
 
@@ -140,8 +162,10 @@ func (c *Consumer) Consume(ctx context.Context, h Handler) error {
 			}
 			log.Warn("commit failed; will retry later", zap.Error(err))
 			time.Sleep(time.Second)
+			span.End()
 			continue
 		}
+		span.End()
 	}
 }
 

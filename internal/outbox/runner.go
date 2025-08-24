@@ -2,6 +2,8 @@ package outbox
 
 import (
 	"context"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 	"strconv"
 	"sync"
 	"time"
@@ -79,58 +81,74 @@ func (r *Runner) worker(ctx context.Context, wg *sync.WaitGroup) {
 	defer ticker.Stop()
 
 	tr := otel.Tracer("outbox.runner")
+	prop := otel.GetTextMapPropagator()
 
 	for {
 		select {
 		case <-ctx.Done():
 			r.log.Info("outbox worker stop")
 			return
+
 		case <-ticker.C:
 			t0 := time.Now()
+
 			ctxSpan, span := tr.Start(ctx, "outbox.tick")
 			span.SetAttributes(
 				attribute.Int("batch.limit", r.batchSize),
-				attribute.String("ttl", r.inProgressTTL.String()),
+				attribute.String("in_progress_ttl", r.inProgressTTL.String()),
 			)
 
 			messages, err := r.repo.PickBatch(ctxSpan, r.batchSize, r.inProgressTTL)
 			if err != nil {
 				span.RecordError(err)
-				span.End()
 				r.mErr.Inc()
 				obs.WithTrace(ctxSpan, r.log).Error("outbox pick error", zap.Error(err))
+				span.End()
 				continue
 			}
 			r.mPicked.Add(float64(len(messages)))
 			r.mBatchSize.Set(float64(len(messages)))
 
 			okKeys := make([]string, 0, len(messages))
+
 			for _, m := range messages {
-				msgCtx, msgSpan := tr.Start(ctxSpan, "outbox.dispatch")
-				msgSpan.SetAttributes(
-					attribute.String("key", m.IdempotencyKey),
-					attribute.Int("kind", int(m.Kind)),
+				parent := prop.Extract(context.Background(), propagation.MapCarrier{
+					"traceparent": m.Traceparent,
+					"tracestate":  m.Tracestate,
+					"baggage":     m.Baggage,
+				})
+
+				msgCtx, msgSpan := tr.Start(parent, "outbox.dispatch",
+					trace.WithAttributes(
+						attribute.String("outbox.key", m.IdempotencyKey),
+						attribute.Int("outbox.kind", int(m.Kind)),
+					),
 				)
 
 				handler, herr := r.dispatch(m.Kind)
 				if herr != nil {
 					msgSpan.RecordError(herr)
-					msgSpan.End()
 					r.mErr.Inc()
-					obs.WithTrace(msgCtx, r.log).Error("no handler for kind", zap.Int("kind", int(m.Kind)), zap.Error(herr))
+					obs.WithTrace(msgCtx, r.log).Error("no handler for kind",
+						zap.Int("kind", int(m.Kind)), zap.Error(herr))
+					msgSpan.End()
 					continue
 				}
+
 				if err := handler(msgCtx, m.Data); err != nil {
 					msgSpan.RecordError(err)
-					msgSpan.End()
 					r.mErr.Inc()
-					obs.WithTrace(msgCtx, r.log).Error("handler error", zap.Int("kind", int(m.Kind)), zap.Error(err))
+					obs.WithTrace(msgCtx, r.log).Error("handler error",
+						zap.Int("kind", int(m.Kind)), zap.Error(err))
+					msgSpan.End()
 					continue
 				}
+
 				msgSpan.End()
 				okKeys = append(okKeys, m.IdempotencyKey)
 				r.mOk.Inc()
 			}
+
 			if err := r.repo.MarkSuccess(ctxSpan, okKeys); err != nil {
 				span.RecordError(err)
 				r.mErr.Inc()

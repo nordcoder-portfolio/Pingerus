@@ -32,11 +32,11 @@ services:
       POSTGRES_DB: pingerus
     volumes:
       - pgdata:/var/lib/postgresql/data
-    networks: [pingerus-net]
+    networks: [ pingerus-net ]
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d pingerus"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d pingerus" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -55,21 +55,71 @@ services:
       KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
       ALLOW_PLAINTEXT_LISTENER: "yes"
       KAFKA_KRAFT_CLUSTER_ID: "abcdefghijklmnopqrstuvwx"
-    networks: [pingerus-net]
+    networks: [ pingerus-net ]
     ports:
       - "9092:9092"
     healthcheck:
-      test: ["CMD-SHELL", "unset KAFKA_OPTS; /opt/bitnami/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      test: [ "CMD-SHELL", "unset KAFKA_OPTS; /opt/bitnami/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1" ]
       interval: 10s
       timeout: 5s
       retries: 20
 
   mailhog:
     image: mailhog/mailhog:latest
-    networks: [pingerus-net]
+    networks: [ pingerus-net ]
     ports:
       - "1025:1025"
       - "8025:8025"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.109.0
+    command: [ "--config=/etc/otel-collector-config.yaml" ]
+    volumes:
+      - ./deploy/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    networks: [ pingerus-net ]
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    ports:
+      - "9090:9090"
+    networks: [ pingerus-net ]
+
+  tempo:
+    image: grafana/tempo:latest
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./deploy/tempo.yaml:/etc/tempo.yaml
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200"
+    networks: [ pingerus-net ]
+
+  loki:
+    image: grafana/loki:2.9.3
+    command: [ "-config.file=/etc/loki/local-config.yaml" ]
+    ports:
+      - "3100:3100"
+    networks: [ pingerus-net ]
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports:
+      - "3000:3000"
+    networks: [ pingerus-net ]
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
 
   migrator:
     build:
@@ -77,7 +127,7 @@ services:
       dockerfile: cmd/migrator/Dockerfile
     environment:
       DB_DSN: "${DB_DSN}"
-    networks: [pingerus-net]
+    networks: [ pingerus-net ]
     depends_on:
       db:
         condition: service_healthy
@@ -89,7 +139,7 @@ services:
       dockerfile: cmd/api-gateway/Dockerfile
     environment:
       <<: *env_secrets
-    networks: [pingerus-net]
+    networks: [ pingerus-net ]
     depends_on:
       db:
         condition: service_healthy
@@ -101,7 +151,7 @@ services:
       - "8080:8080"
       - "9090:9090"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8080/healthz" ]
       interval: 10s
       timeout: 3s
       retries: 10
@@ -120,11 +170,11 @@ services:
         condition: service_started
       migrator:
         condition: service_completed_successfully
-    networks: [pingerus-net]
+    networks: [ pingerus-net ]
     ports:
       - "8082:8082"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8082/healthz"]
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8082/healthz" ]
       interval: 10s
       timeout: 3s
       retries: 10
@@ -143,11 +193,11 @@ services:
         condition: service_started
       migrator:
         condition: service_completed_successfully
-    networks: [pingerus-net]
+    networks: [ pingerus-net ]
     ports:
       - "8083:8083"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8083/healthz"]
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8083/healthz" ]
       interval: 10s
       timeout: 3s
       retries: 10
@@ -168,11 +218,11 @@ services:
         condition: service_started
       migrator:
         condition: service_completed_successfully
-    networks: [pingerus-net]
+    networks: [ pingerus-net ]
     ports:
       - "8084:8084"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8084/healthz"]
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8084/healthz" ]
       interval: 10s
       timeout: 3s
       retries: 10

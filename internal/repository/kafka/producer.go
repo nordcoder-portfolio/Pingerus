@@ -2,6 +2,9 @@ package kafka
 
 import (
 	"context"
+	"go.opentelemetry.io/otel"
+	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
+	"go.opentelemetry.io/otel/trace"
 	"strconv"
 
 	"github.com/segmentio/kafka-go"
@@ -43,7 +46,23 @@ func (p *Producer) PublishProto(ctx context.Context, key []byte, m proto.Message
 		p.log.Error("proto marshal failed", zap.Error(err))
 		return err
 	}
-	err = p.w.WriteMessages(ctx, kafka.Message{Key: key, Value: value})
+
+	tr := otel.Tracer("kafka.producer")
+	ctx, span := tr.Start(ctx, "kafka.produce "+p.topic, trace.WithSpanKind(trace.SpanKindProducer),
+		trace.WithAttributes(
+			semconv.MessagingSystemKafka,
+			semconv.MessagingDestinationName(p.topic),
+			semconv.MessagingOperationPublish,
+		),
+	)
+	defer span.End()
+
+	hdrs := mapCarrierHeaders{}
+	otel.GetTextMapPropagator().Inject(ctx, hdrs)
+
+	msg := kafka.Message{Key: key, Value: value, Headers: hdrs.ToKafka()}
+
+	err = p.w.WriteMessages(ctx, msg)
 	if err != nil {
 		p.log.Error("kafka write failed", zap.Error(err))
 		return err

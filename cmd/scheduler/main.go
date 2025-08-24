@@ -35,10 +35,10 @@ func main() {
 
 	ctx := context.Background()
 	otelCloser, err := obs.SetupOTel(ctx, obs.OTELConfig{
-		Enable:      true,
-		Endpoint:    "",
-		ServiceName: "scheduler",
-		SampleRatio: 1.0,
+		Enable:      cfg.OTEL.Enable,
+		Endpoint:    cfg.OTEL.OTLPEndpoint,
+		ServiceName: cfg.OTEL.ServiceName,
+		SampleRatio: cfg.OTEL.SampleRatio,
 	})
 	if err != nil {
 		log.Fatal("otel init", zap.Error(err))

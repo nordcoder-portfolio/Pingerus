@@ -1,13 +1,17 @@
 -- +goose Up
 CREATE TYPE outbox_status AS ENUM ('CREATED', 'IN_PROGRESS', 'SUCCESS');
 
-CREATE TABLE IF NOT EXISTS outbox (
-                                      idempotency_key TEXT PRIMARY KEY,
-                                      data            JSONB                   NOT NULL,
-                                      status          outbox_status           NOT NULL,
-                                      kind            INT                     NOT NULL,
-                                      created_at      TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
-                                      updated_at      TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+CREATE TABLE IF NOT EXISTS outbox
+(
+    idempotency_key TEXT PRIMARY KEY,
+    data            JSONB                                  NOT NULL,
+    status          outbox_status                          NOT NULL,
+    kind            INT                                    NOT NULL,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    traceparent     TEXT,
+    tracestate      TEXT,
+    baggage         TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_outbox_status_created_at

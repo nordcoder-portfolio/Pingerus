@@ -33,6 +33,11 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("http.follow_redirects", true)
 	v.SetDefault("http.verify_tls", true)
 
+	v.SetDefault("otel.enable", false)
+	v.SetDefault("otel.service_name", "ping-worker")
+	v.SetDefault("otel.sample_ratio", 1.0)
+	v.SetDefault("otel.otlp_endpoint", "localhost:4317")
+
 	v.SetDefault("server.metrics_addr", ":8083")
 	v.SetDefault("log_level", "info")
 

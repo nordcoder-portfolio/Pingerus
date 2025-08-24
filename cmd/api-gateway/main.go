@@ -136,6 +136,7 @@ func main() {
 
 	pb.RegisterCheckServiceServer(grpcServer, checkSrv)
 	pbauth.RegisterAuthServiceServer(grpcServer, authSrv)
+
 	reflection.Register(grpcServer)
 
 	grpcLn, err := net.Listen("tcp", cfg.Server.GRPCAddr)

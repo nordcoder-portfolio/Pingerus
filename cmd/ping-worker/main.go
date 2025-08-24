@@ -41,10 +41,10 @@ func main() {
 
 	root := context.Background()
 	otelCloser, err := obs.SetupOTel(root, obs.OTELConfig{
-		Enable:      true,
-		Endpoint:    "",
-		ServiceName: "ping-worker",
-		SampleRatio: 1.0,
+		Enable:      cfg.OTEL.Enable,
+		Endpoint:    cfg.OTEL.OTLPEndpoint,
+		ServiceName: cfg.OTEL.ServiceName,
+		SampleRatio: cfg.OTEL.SampleRatio,
 	})
 	if err != nil {
 		log.Fatal("otel init", zap.Error(err))

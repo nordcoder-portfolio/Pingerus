@@ -45,10 +45,10 @@ func main() {
 
 	rootCtx := context.Background()
 	otelCloser, err := obs.SetupOTel(rootCtx, obs.OTELConfig{
-		Enable:      false,
-		Endpoint:    "",
-		ServiceName: "email-notifier",
-		SampleRatio: 1.0,
+		Enable:      cfg.OTEL.Enable,
+		Endpoint:    cfg.OTEL.OTLPEndpoint,
+		ServiceName: cfg.OTEL.ServiceName,
+		SampleRatio: cfg.OTEL.SampleRatio,
 	})
 	if err != nil {
 		log.Warn("otel init", zap.Error(err))

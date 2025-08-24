@@ -16,4 +16,10 @@ sched:
   batch_limit: 100
   metrics_addr: ":8082"
 
+otel:
+  enable: false
+  otlp_endpoint: "otel-collector:4317"
+  service_name: "scheduler"
+  sample_ratio: 0.1
+
 log_level: "debug"

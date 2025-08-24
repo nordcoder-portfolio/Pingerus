@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"time"
 
 	"github.com/NordCoder/Pingerus/internal/domain/outbox"
@@ -15,8 +17,8 @@ func NewOutboxRepo(db *DB) *OutboxRepo { return &OutboxRepo{db: db} }
 
 const (
 	qEnqueue = `
-INSERT INTO outbox (idempotency_key, data, status, kind)
-VALUES ($1, $2, 'CREATED', $3)
+INSERT INTO outbox (idempotency_key, data, status, kind, traceparent, tracestate, baggage)
+VALUES ($1, $2, 'CREATED', $3, $4, $5, $6)
 ON CONFLICT (idempotency_key) DO NOTHING;`
 
 	qPickLocked = `
@@ -39,9 +41,9 @@ WITH cand AS (
       o.status = 'CREATED'
       OR (o.status = 'IN_PROGRESS' AND o.updated_at < now() - $2::interval)
     )
-  RETURNING o.idempotency_key, o.kind, o.data, o.status, o.created_at, o.updated_at
+  RETURNING o.idempotency_key, o.kind, o.data, o.status, o.created_at, o.updated_at, o.traceparent, o.tracestate, o.baggage
 )
-SELECT idempotency_key, kind, data, status, created_at, updated_at
+SELECT idempotency_key, kind, data, status, created_at, updated_at, traceparent, tracestate, baggage
 FROM upd;`
 
 	qMarkSuccess = `
@@ -55,8 +57,11 @@ func (r *OutboxRepo) Enqueue(ctx context.Context, key string, kind outbox.Kind, 
 	ctx, cancel := r.db.withTimeout(ctx)
 	defer cancel()
 
+	carrier := propagation.MapCarrier{}
+	otel.GetTextMapPropagator().Inject(ctx, carrier)
+
 	eq := r.db.execQueryer(ctx)
-	_, err := eq.Exec(ctx, qEnqueue, key, data, kind)
+	_, err := eq.Exec(ctx, qEnqueue, key, data, kind, carrier["traceparent"], carrier["tracestate"], carrier["baggage"])
 	return err
 }
 
@@ -86,7 +91,7 @@ func (r *OutboxRepo) PickBatch(ctx context.Context, batch int, inProgressTTL tim
 	for rows.Next() {
 		var m outbox.Message
 		var status string
-		if err := rows.Scan(&m.IdempotencyKey, &m.Kind, &m.Data, &status, &m.CreatedAt, &m.UpdatedAt); err != nil {
+		if err := rows.Scan(&m.IdempotencyKey, &m.Kind, &m.Data, &status, &m.CreatedAt, &m.UpdatedAt, m.Traceparent, m.Tracestate, m.Baggage); err != nil {
 			return nil, fmt.Errorf("outbox scan: %w", err)
 		}
 		m.Status = outbox.Status(status)

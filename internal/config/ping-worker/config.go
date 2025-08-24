@@ -28,6 +28,13 @@ type Server struct {
 	MetricsAddr string `mapstructure:"metrics_addr"`
 }
 
+type OTEL struct {
+	Enable       bool    `mapstructure:"enable"`
+	OTLPEndpoint string  `mapstructure:"otlp_endpoint"`
+	ServiceName  string  `mapstructure:"service_name"`
+	SampleRatio  float64 `mapstructure:"sample_ratio"`
+}
+
 type Config struct {
 	DB       pginfra.Config `mapstructure:"db"`
 	In       KafkaIn        `mapstructure:"kafka_in"`
@@ -35,4 +42,5 @@ type Config struct {
 	HTTP     HTTPPing       `mapstructure:"http"`
 	Server   Server         `mapstructure:"server"`
 	LogLevel string         `mapstructure:"log_level"`
+	OTEL     OTEL           `mapstructure:"otel"`
 }

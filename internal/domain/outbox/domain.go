@@ -20,6 +20,9 @@ type Message struct {
 	Status         Status
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	Tracestate     string
+	Traceparent    string
+	Baggage        string
 }
 
 type Repository interface {

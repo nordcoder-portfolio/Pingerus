@@ -17,9 +17,17 @@ type SchedCfg struct {
 	MetricsAddr string        `mapstructure:"metrics_addr"`
 }
 
+type OTEL struct {
+	Enable       bool    `mapstructure:"enable"`
+	OTLPEndpoint string  `mapstructure:"otlp_endpoint"`
+	ServiceName  string  `mapstructure:"service_name"`
+	SampleRatio  float64 `mapstructure:"sample_ratio"`
+}
+
 type Config struct {
 	DB       pginfra.Config `mapstructure:"db"`
 	Kafka    KafkaCfg       `mapstructure:"kafka"`
 	Sched    SchedCfg       `mapstructure:"sched"`
 	LogLevel string         `mapstructure:"log_level"`
+	OTEL     OTEL           `mapstructure:"otel"`
 }

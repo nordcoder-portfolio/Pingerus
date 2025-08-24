@@ -65,6 +65,56 @@ services:
       timeout: 3s
       retries: 40
 
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.109.0
+    command: [ "--config=/etc/otel-collector-config.yaml" ]
+    volumes:
+      - ./deploy/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    networks: [ pingerus-net ]
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    ports:
+      - "9090:9090"
+    networks: [ pingerus-net ]
+
+  tempo:
+    image: grafana/tempo:latest
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./deploy/tempo.yaml:/etc/tempo.yaml
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200"
+    networks: [pingerus-net]
+
+  loki:
+    image: grafana/loki:2.9.3
+    command: [ "-config.file=/etc/loki/local-config.yaml" ]
+    ports:
+      - "3100:3100"
+    networks: [ pingerus-net ]
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports:
+      - "3000:3000"
+    networks: [ pingerus-net ]
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+
   email-notifier:
     build:
       context: .
@@ -92,6 +142,7 @@ services:
         condition: service_completed_successfully
       mailhog:
         condition: service_started
+
     ports:
       - "8084:8084"
     networks: [pingerus-it]
@@ -157,3 +208,4 @@ services:
       interval: 5s
       timeout: 3s
       retries: 60
+
