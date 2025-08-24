@@ -80,7 +80,7 @@ services:
     volumes:
       - ./deploy/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
     ports: ["4317:4317","4318:4318"]
-    networks: [pingerus-net]
+    networks: [ pingerus-net ]
 
   tempo:
     image: grafana/tempo:latest
@@ -89,7 +89,7 @@ services:
       - ./deploy/tempo.yaml:/etc/tempo.yaml:ro
       - tempo-data:/var/tempo
     ports: ["3200:3200"]
-    networks: [pingerus-net]
+    networks: [ pingerus-net ]
 
   loki:
     image: grafana/loki:2.9.3
@@ -98,7 +98,7 @@ services:
       - ./deploy/loki-config.yaml:/etc/loki/local-config.yaml:ro
       - loki-data:/loki
     ports: ["3100:3100"]
-    networks: [pingerus-net]
+    networks: [ pingerus-net ]
 
   promtail:
     image: grafana/promtail:2.9.3
@@ -107,7 +107,7 @@ services:
       - ./deploy/promtail.yaml:/etc/promtail/config.yaml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks: [pingerus-net]
+    networks: [ pingerus-net ]
     depends_on: { loki: { condition: service_started } }
 
   prometheus:
@@ -121,7 +121,7 @@ services:
       - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prom-data:/prometheus
     ports: ["9090:9090"]
-    networks: [pingerus-net]
+    networks: [ pingerus-net ]
 
   grafana:
     image: grafana/grafana:latest
@@ -131,7 +131,7 @@ services:
     volumes:
       - ./deploy/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
     ports: ["3000:3000"]
-    networks: [pingerus-net]
+    networks: [ pingerus-net ]
     depends_on:
       - prometheus
       - loki
