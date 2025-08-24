@@ -26,7 +26,7 @@ server:
   metrics_addr: ":8083"
 
 otel:
-  enable: false
+  enable: true
   otlp_endpoint: "otel-collector:4317"
   service_name: "ping-worker"
   sample_ratio: 0.1

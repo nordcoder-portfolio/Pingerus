@@ -67,53 +67,66 @@ services:
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.109.0
-    command: [ "--config=/etc/otel-collector-config.yaml" ]
+    command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
-      - ./deploy/otel-collector-config.yaml:/etc/otel-collector-config.yaml
-    ports:
-      - "4317:4317"
-      - "4318:4318"
-    networks: [ pingerus-net ]
-
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-    ports:
-      - "9090:9090"
-    networks: [ pingerus-net ]
+      - ./deploy/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports: ["4317:4317","4318:4318"]
+    networks: [pingerus-net]
 
   tempo:
     image: grafana/tempo:latest
     command: ["-config.file=/etc/tempo.yaml"]
     volumes:
-      - ./deploy/tempo.yaml:/etc/tempo.yaml
+      - ./deploy/tempo.yaml:/etc/tempo.yaml:ro
       - tempo-data:/var/tempo
-    ports:
-      - "3200:3200"
+    ports: ["3200:3200"]
     networks: [pingerus-net]
 
   loki:
     image: grafana/loki:2.9.3
-    command: [ "-config.file=/etc/loki/local-config.yaml" ]
-    ports:
-      - "3100:3100"
-    networks: [ pingerus-net ]
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes:
+      - ./deploy/loki-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    ports: ["3100:3100"]
+    networks: [pingerus-net]
+
+  promtail:
+    image: grafana/promtail:2.9.3
+    command: ["-config.file=/etc/promtail/config.yaml"]
+    volumes:
+      - ./deploy/promtail.yaml:/etc/promtail/config.yaml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [pingerus-net]
+    depends_on: { loki: { condition: service_started } }
+
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom-data:/prometheus
+    ports: ["9090:9090"]
+    networks: [pingerus-net]
 
   grafana:
     image: grafana/grafana:latest
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    ports:
-      - "3000:3000"
-    networks: [ pingerus-net ]
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./deploy/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+    ports: ["3000:3000"]
+    networks: [pingerus-net]
     depends_on:
       - prometheus
-      - tempo
       - loki
+      - tempo
 
   email-notifier:
     build:

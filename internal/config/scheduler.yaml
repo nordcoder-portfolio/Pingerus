@@ -17,7 +17,7 @@ sched:
   metrics_addr: ":8082"
 
 otel:
-  enable: false
+  enable: true
   otlp_endpoint: "otel-collector:4317"
   service_name: "scheduler"
   sample_ratio: 0.1
