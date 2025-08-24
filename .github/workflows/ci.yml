@@ -253,6 +253,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Sync deploy configs
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "deploy/*"
+          target: "/opt/pingerus/deploy"
+          strip_components: 1
+
+      - name: Sync compose files
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: |
+            docker-compose.deploy.yml
+          target: "/opt/pingerus"
+
       - name: Compute TAG
         id: vars
         shell: bash
