@@ -9,6 +9,25 @@ volumes:
 
 
 services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      API_BASE:
+#    depends_on:
+#      api-gateway:
+#        condition: service_healthy
+    networks: [ pingerus-net ]
+    ports:
+      - "80:80"
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost/" ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   db:
     image: postgres:16
     environment:
@@ -39,6 +58,7 @@ services:
       KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
       ALLOW_PLAINTEXT_LISTENER: "yes"
       KAFKA_KRAFT_CLUSTER_ID: "abcdefghijklmnopqrstuvwx"
+      KAFKA_HEAP_OPTS: -Xms128m -Xmx256m
     networks: [ pingerus-net ]
     ports: [ "9092:9092" ]
     healthcheck:
