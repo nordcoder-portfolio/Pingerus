@@ -290,6 +290,8 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script_stop: true
+          timeout: 60m
+          command_timeout: 120m
           script: |
             set -e
             TAG='${{ steps.vars.outputs.tag }}'
