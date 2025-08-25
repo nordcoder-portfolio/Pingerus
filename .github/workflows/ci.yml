@@ -244,6 +244,7 @@ jobs:
             scheduler.tags=${{ steps.img.outputs.path }}/scheduler:${{ steps.vars.outputs.tag }}
             ping-worker.tags=${{ steps.img.outputs.path }}/ping-worker:${{ steps.vars.outputs.tag }}
             email-notifier.tags=${{ steps.img.outputs.path }}/email-notifier:${{ steps.vars.outputs.tag }}
+            frontend.tags=${{ steps.img.outputs.path }}/frontend:${{ steps.vars.outputs.tag }}
 
   deploy-prod:
     if: ${{ github.event_name == 'workflow_dispatch' || github.ref_type == 'tag' || github.ref_name == 'main' }}

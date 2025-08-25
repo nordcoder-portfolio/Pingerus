@@ -1,5 +1,5 @@
 group "default" {
-  targets = ["migrator", "api-gateway", "scheduler", "ping-worker", "email-notifier"]
+  targets = ["migrator", "api-gateway", "scheduler", "ping-worker", "email-notifier", "frontend"]
 }
 
 target "base" {
@@ -29,4 +29,9 @@ target "ping-worker" {
 target "email-notifier" {
   inherits   = ["base"]
   dockerfile = "cmd/email-notifier/Dockerfile"
+}
+
+target "frontend" {
+  inherits   = ["base"]
+  dockerfile = "frontend/Dockerfile"
 }
