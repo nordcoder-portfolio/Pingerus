@@ -10,7 +10,7 @@ volumes:
 
 services:
   frontend:
-    image: ghcr.io/nordcoder-portfolio/pingerus/migrator:${TAG}
+    image: ghcr.io/nordcoder-portfolio/pingerus/frontend:${TAG}
     build:
       context: ./frontend
       dockerfile: Dockerfile
