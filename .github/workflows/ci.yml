@@ -25,39 +25,41 @@ env:
   IMAGE_OWNER: nordcoder-portfolio
   IMAGE_REPO: Pingerus
   GO_VERSION: "1.24"
+  GOBIN_CACHE_PREFIX: ${{ runner.os }}-gobin-${{ hashFiles('**/scripts/bootstrap_proto.sh') }}-${{ hashFiles('**/go.mod') }}-
 
 jobs:
   bootstrap-cache:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Cache Go bin (
+      - name: Cache Go bin — restore
         id: gobin-cache
         uses: actions/cache/restore@v4
         with:
           path: ~/go/bin
-          key: ${{ runner.os }}-gobin-${{ hashFiles('**/scripts/bootstrap_proto.sh') }}-${{ hashFiles('**/go.mod') }}
+          key: ${{ env.GOBIN_CACHE_PREFIX }}${{ github.run_id }}
+          restore-keys: |
+            ${{ env.GOBIN_CACHE_PREFIX }}
 
       - uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Bootstrap (install protoc plugins if missing)
+      - name: Bootstrap (install plugins if missing)
+        if: steps.gobin-cache.outputs.cache-hit != 'true'
         run: make bootstrap
 
-      - name: Cache Go bin (protoc plugins) — save
+      - name: Cache Go bin — save
         if: steps.gobin-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: ~/go/bin
-          key: ${{ runner.os }}-gobin-${{ hashFiles('**/scripts/bootstrap_proto.sh') }}-${{ hashFiles('**/go.mod') }}
+          key: ${{ env.GOBIN_CACHE_PREFIX }}${{ github.run_id }}
 
   gen:
     needs: [bootstrap-cache]
@@ -71,11 +73,13 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Restore Go bin (protoc plugins)
+      - name: Cache Go bin — restore
         uses: actions/cache/restore@v4
         with:
           path: ~/go/bin
-          key: ${{ runner.os }}-gobin-${{ hashFiles('**/scripts/bootstrap_proto.sh') }}-${{ hashFiles('**/go.mod') }}
+          key: ${{ env.GOBIN_CACHE_PREFIX }}${{ github.run_id }}
+          restore-keys: |
+            ${{ env.GOBIN_CACHE_PREFIX }}
 
       - name: Generate protos (once)
         run: make generate
