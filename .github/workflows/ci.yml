@@ -30,6 +30,8 @@ env:
 jobs:
   bootstrap-cache:
     runs-on: ubuntu-latest
+    env:
+      GOBIN_CACHE_PREFIX: ${{ runner.os }}-gobin-${{ hashFiles('**/scripts/bootstrap_proto.sh') }}-${{ hashFiles('**/go.mod') }}-
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -64,6 +66,8 @@ jobs:
   gen:
     needs: [bootstrap-cache]
     runs-on: ubuntu-latest
+    env:
+      GOBIN_CACHE_PREFIX: ${{ runner.os }}-gobin-${{ hashFiles('**/scripts/bootstrap_proto.sh') }}-${{ hashFiles('**/go.mod') }}-
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
