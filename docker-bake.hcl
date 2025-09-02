@@ -32,6 +32,6 @@ target "email-notifier" {
 }
 
 target "frontend" {
-  inherits    = ["base"]
   dockerfile = "frontend/Dockerfile"
+  context    = "frontend"
 }
