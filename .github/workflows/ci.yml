@@ -32,6 +32,7 @@ jobs:
     outputs:
       gobin_prefix: ${{ steps.vars.outputs.gobin_prefix }}
     steps:
+      - uses: actions/checkout@v4
       - id: vars
         run: |
           echo "gobin_prefix=${{ runner.os }}-gobin-${{ hashFiles('**/scripts/bootstrap_proto.sh') }}-${{ hashFiles('**/go.mod') }}-" >> "$GITHUB_OUTPUT"
@@ -41,6 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
@@ -93,6 +95,9 @@ jobs:
       - uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch third-party protos
+        run: bash scripts/bootstrap_proto.sh
 
       - name: Generate protos (once)
         run: make -o bootstrap generate
