@@ -87,11 +87,6 @@ func main() {
 	// kafka
 	cons := kafka.BootstrapConsumer(rootCtx, cfg.In.AsConsumerConfig(), l).WithLogger(l)
 	defer func() { _ = cons.Close() }()
-	l.Info("kafka consumer initialized",
-		zap.Strings("brokers", cfg.In.Brokers),
-		zap.String("group_id", cfg.In.GroupID),
-		zap.String("topic", cfg.In.Topic),
-	)
 
 	// start
 	ctrl := wiring(db, cfg, cons, l)
@@ -100,6 +95,8 @@ func main() {
 		l.Info("controller starting")
 		errCh <- ctrl.Run(rootCtx)
 	}()
+
+	l.Info("email-notifier started")
 
 	// main loop
 	var runErr error

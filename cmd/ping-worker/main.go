@@ -76,6 +76,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	l.Info("starting ping-worker",
+		zap.Any("kafka_in", cfg.In),
+		zap.Any("kafka_out", cfg.Out),
+		zap.String("metrics_addr", cfg.Server.MetricsAddr),
+	)
 
 	// otel
 	otelCloser, err := obs.SetupOTel(root, cfg.OTEL.AsOTELConfig())
@@ -114,6 +119,8 @@ func main() {
 	outboxRunner.Start(root)
 	errCh := make(chan error, 1)
 	go func() { errCh <- ctrl.Run(root) }()
+
+	l.Info("ping worker and outbox started")
 
 	// loop
 	select {

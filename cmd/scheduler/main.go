@@ -33,6 +33,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	l.Info("starting scheduler",
+		zap.Any("kafka_out", cfg.Kafka),
+		zap.String("metrics_addr", cfg.Sched.MetricsAddr),
+	)
 
 	// otel
 	otelCloser, err := obs.SetupOTel(ctx, cfg.OTEL.AsOTELConfig())
@@ -71,6 +75,8 @@ func main() {
 	// run
 	errCh := make(chan error, 1)
 	go func() { errCh <- runner.Run(ctx) }()
+
+	l.Info("scheduler started")
 
 	// loop
 	select {
