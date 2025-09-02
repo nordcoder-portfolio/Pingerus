@@ -59,13 +59,17 @@ func main() {
 	go func() { grpcErrCh <- serveGRPC(grpcServer, grpcLn, cfg, logger) }()
 
 	// http
-	httpSrv, err := buildHTTPServer(rootCtx, cfg, logger, db, grpcMetrics)
+	httpSrv, conn, err := buildHTTPServer(rootCtx, cfg, logger, db, grpcMetrics)
 	if err != nil {
-		logger.Fatal("build http", zap.Error(err))
+		logger.Fatal("build http server", zap.Error(err))
 	}
+	defer func() { _ = conn.Close() }()
 
-	httpErrCh := make(chan error, 1)
-	go func() { httpErrCh <- serveHTTP(httpSrv, cfg, logger) }()
+	httpErrCh := make(chan error, 2)
+	go func() {
+		logger.Info("http listening", zap.String("addr", cfg.Server.HTTPAddr))
+		httpErrCh <- httpSrv.ListenAndServe()
+	}()
 
 	// runner
 	var runErr error
