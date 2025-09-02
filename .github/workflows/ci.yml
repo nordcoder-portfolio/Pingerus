@@ -25,7 +25,6 @@ env:
   IMAGE_OWNER: nordcoder-portfolio
   IMAGE_REPO: Pingerus
   GO_VERSION: "1.24"
-  GOBIN_CACHE_PREFIX: ${{ runner.os }}-gobin-${{ hashFiles('**/scripts/bootstrap_proto.sh') }}-${{ hashFiles('**/go.mod') }}-
 
 jobs:
   bootstrap-cache:
