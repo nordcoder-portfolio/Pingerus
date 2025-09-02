@@ -29,6 +29,7 @@ func main() {
 	if cfg.LogLevel == "debug" {
 		logCfg = zap.NewDevelopmentConfig()
 	}
+
 	log, _ := logCfg.Build()
 	defer func() { _ = log.Sync() }()
 	log = log.With(zap.String("service", "scheduler"))
@@ -40,6 +41,7 @@ func main() {
 		ServiceName: cfg.OTEL.ServiceName,
 		SampleRatio: cfg.OTEL.SampleRatio,
 	})
+
 	if err != nil {
 		log.Fatal("otel init", zap.Error(err))
 	}
