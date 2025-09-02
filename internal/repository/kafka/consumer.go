@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/segmentio/kafka-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -79,6 +81,8 @@ func (c *Consumer) Consume(ctx context.Context, h Handler) error {
 	backoff := 200 * time.Millisecond
 	const maxBackoff = 5 * time.Second
 
+	tr := otel.Tracer("kafka.consumer")
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -110,10 +114,34 @@ func (c *Consumer) Consume(ctx context.Context, h Handler) error {
 
 		backoff = 200 * time.Millisecond
 
-		if err := h(ctx, msg.Key, msg.Value); err != nil {
-			log.Error("handler error", zap.Int("partition", msg.Partition), zap.Int64("offset", msg.Offset), zap.Error(err))
+		prop := otel.GetTextMapPropagator()
+		parent := prop.Extract(ctx, mapCarrierFromKafka(msg.Headers))
+
+		rcvCtx, rcvSpan := tr.Start(
+			parent,
+			"kafka.receive "+c.cfg.Topic,
+			trace.WithSpanKind(trace.SpanKindConsumer),
+		)
+		rcvSpan.End()
+
+		procCtx, procSpan := tr.Start(
+			rcvCtx,
+			"process "+c.cfg.Topic,
+			trace.WithSpanKind(trace.SpanKindInternal),
+		)
+
+		if err := h(procCtx, msg.Key, msg.Value); err != nil {
+			procSpan.RecordError(err)
+			procSpan.End()
+
+			log.Error("handler error",
+				zap.Int("partition", msg.Partition),
+				zap.Error(err),
+			)
 			continue
 		}
+
+		procSpan.End()
 
 		if err := c.reader.CommitMessages(ctx, msg); err != nil {
 			if ctx.Err() != nil {
