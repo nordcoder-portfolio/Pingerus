@@ -32,6 +32,6 @@ target "email-notifier" {
 }
 
 target "frontend" {
-  dockerfile = "frontend/Dockerfile"
   context    = "frontend"
+  dockerfile = "Dockerfile"
 }
