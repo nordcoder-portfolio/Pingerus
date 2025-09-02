@@ -1,6 +1,7 @@
 GO       ?= go
 LINTER   ?= golangci-lint
 COMPOSE  ?= $(shell if docker compose version >/dev/null 2>&1; then echo "docker compose"; else echo "docker-compose"; fi)
+SHELL := /bin/bash
 
 BIN_DIR  := bin
 SERVICES := api-gateway scheduler ping-worker email-notifier

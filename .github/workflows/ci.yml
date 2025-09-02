@@ -16,6 +16,10 @@ permissions:
   contents: read
   packages: write
 
+defaults:
+  run:
+    shell: bash
+
 env:
   REGISTRY: ghcr.io
   IMAGE_OWNER: nordcoder-portfolio
@@ -25,6 +29,7 @@ env:
 jobs:
   bootstrap-cache:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -33,7 +38,7 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Cache Go bin
+      - name: Cache Go bin (
         id: gobin-cache
         uses: actions/cache/restore@v4
         with:
@@ -44,7 +49,7 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Bootstrap protoc
+      - name: Bootstrap (install protoc plugins if missing)
         run: make bootstrap
 
       - name: Cache Go bin (protoc plugins) — save
@@ -54,9 +59,10 @@ jobs:
           path: ~/go/bin
           key: ${{ runner.os }}-gobin-${{ hashFiles('**/scripts/bootstrap_proto.sh') }}-${{ hashFiles('**/go.mod') }}
 
-  lint:
+  gen:
     needs: [bootstrap-cache]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -65,18 +71,42 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Cache Go bin (protoc plugins) — restore
+      - name: Restore Go bin (protoc plugins)
         uses: actions/cache/restore@v4
         with:
           path: ~/go/bin
           key: ${{ runner.os }}-gobin-${{ hashFiles('**/scripts/bootstrap_proto.sh') }}-${{ hashFiles('**/go.mod') }}
 
-      - uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate protos
+      - name: Generate protos (once)
         run: make generate
+
+      - name: Upload generated artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gen-artifacts
+          path: |
+            generated
+            docs/spec
+          if-no-files-found: error
+          retention-days: 7
+
+  lint:
+    needs: [gen]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Download generated artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: gen-artifacts
+          path: .
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
@@ -85,8 +115,9 @@ jobs:
           args: ./...
 
   unit:
-    needs: [bootstrap-cache]
+    needs: [gen]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -95,29 +126,23 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Cache Go bin (protoc plugins) — restore
-        uses: actions/cache/restore@v4
+      - name: Download generated artifacts
+        uses: actions/download-artifact@v4
         with:
-          path: ~/go/bin
-          key: ${{ runner.os }}-gobin-${{ hashFiles('**/scripts/bootstrap_proto.sh') }}-${{ hashFiles('**/go.mod') }}
-
-      - uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate protos
-        run: make generate
+          name: gen-artifacts
+          path: .
 
       - name: Unit tests
         run: make test
 
   it:
-    needs: [bootstrap-cache]
+    needs: [gen]
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        target: [email-notifier, ping-worker, api-gateway]
+        target: [en, pw, ag]
     steps:
       - uses: actions/checkout@v4
 
@@ -126,29 +151,14 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Cache Go bin (protoc plugins) — restore
-        uses: actions/cache/restore@v4
+      - name: Download generated artifacts
+        uses: actions/download-artifact@v4
         with:
-          path: ~/go/bin
-          key: ${{ runner.os }}-gobin-${{ hashFiles('**/scripts/bootstrap_proto.sh') }}-${{ hashFiles('**/go.mod') }}
-
-      - uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate protos
-        run: make generate
+          name: gen-artifacts
+          path: .
 
       - name: Run IT (${{ matrix.target }})
-        shell: bash
-        run: |
-          set -euo pipefail
-          case "${{ matrix.target }}" in
-            email-notifier) make it-test-en ;;
-            ping-worker)    make it-test-pw ;;
-            api-gateway)    make it-test-ag ;;
-            *) echo "unknown target"; exit 2 ;;
-          esac
+        run: make it-test-${{ matrix.target }}
 
       - if: failure()
         uses: actions/upload-artifact@v4
@@ -159,6 +169,7 @@ jobs:
   build-and-push:
     needs: [lint, unit, it]
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -167,25 +178,19 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Cache Go bin (protoc plugins) — restore
-        uses: actions/cache/restore@v4
+      - name: Download generated artifacts
+        uses: actions/download-artifact@v4
         with:
-          path: ~/go/bin
-          key: ${{ runner.os }}-gobin-${{ hashFiles('**/scripts/bootstrap_proto.sh') }}-${{ hashFiles('**/go.mod') }}
-
-      - uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate protos
-        run: make generate
+          name: gen-artifacts
+          path: .
 
       - name: Setup Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          install: true
 
       - name: Compute TAG
         id: vars
-        shell: bash
         run: |
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
@@ -195,7 +200,6 @@ jobs:
 
       - name: Derive image path (lowercase)
         id: img
-        shell: bash
         run: |
           owner_lc="${GITHUB_REPOSITORY_OWNER,,}"
           repo="${GITHUB_REPOSITORY#*/}"
@@ -215,6 +219,8 @@ jobs:
           files: ./docker-bake.hcl
           push: true
           set: |
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
             migrator.tags=${{ steps.img.outputs.path }}/migrator:${{ steps.vars.outputs.tag }}
             api-gateway.tags=${{ steps.img.outputs.path }}/api-gateway:${{ steps.vars.outputs.tag }}
             scheduler.tags=${{ steps.img.outputs.path }}/scheduler:${{ steps.vars.outputs.tag }}
@@ -227,6 +233,10 @@ jobs:
     needs: [build-and-push]
     runs-on: ubuntu-latest
     environment: prod
+    timeout-minutes: 60
+    concurrency:
+      group: deploy-${{ github.ref_name }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
 
@@ -252,7 +262,6 @@ jobs:
 
       - name: Compute TAG
         id: vars
-        shell: bash
         run: |
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
