@@ -12,7 +12,7 @@ func main() {
 	if dbURL == "" {
 		log.Fatal("DB_DSN is empty")
 	}
-	dir := "../migrations"
+	dir := "../migrations" // todo config
 
 	if err := goose.SetDialect("postgres"); err != nil {
 		log.Fatalf("set dialect: %v", err)

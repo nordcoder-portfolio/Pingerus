@@ -16,6 +16,32 @@ x-env-secrets: &env_secrets
   SMTP_PASSWORD: "${SMTP_PASSWORD}"
 
 services:
+  # init
+  kafka-init:
+    build:
+      context: .
+      dockerfile: cmd/kafka-init/Dockerfile
+    environment:
+      KAFKA_BROKER: "kafka:9092"
+      KAFKA_TOPICS: "status-change,check-request"
+    networks: [ pingerus-net ]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: "no"
+
+  migrator:
+    build:
+      context: .
+      dockerfile: cmd/migrator/Dockerfile
+    environment:
+      DB_DSN: "${DB_DSN}"
+    networks: [ pingerus-net ]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   frontend:
     build:
       context: ./frontend
@@ -35,6 +61,7 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # repos
   db:
     image: postgres:16
     environment:
@@ -75,13 +102,7 @@ services:
       timeout: 5s
       retries: 20
 
-  mailhog:
-    image: mailhog/mailhog:latest
-    networks: [ pingerus-net ]
-    ports:
-      - "1025:1025"
-      - "8025:8025"
-
+  # observability
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.109.0
     command: ["--config=/etc/otel-collector-config.yaml"]
@@ -145,18 +166,7 @@ services:
       - loki
       - tempo
 
-  migrator:
-    build:
-      context: .
-      dockerfile: cmd/migrator/Dockerfile
-    environment:
-      DB_DSN: "${DB_DSN}"
-    networks: [ pingerus-net ]
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: "no"
-
+  # services
   api-gateway:
     build:
       context: .
@@ -170,6 +180,8 @@ services:
       kafka:
         condition: service_started
       migrator:
+        condition: service_completed_successfully
+      kafka-init:
         condition: service_completed_successfully
     ports:
       - "8080:8080"
@@ -194,6 +206,8 @@ services:
         condition: service_started
       migrator:
         condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
     networks: [ pingerus-net ]
     ports:
       - "8082:8082"
@@ -216,6 +230,8 @@ services:
       kafka:
         condition: service_started
       migrator:
+        condition: service_completed_successfully
+      kafka-init:
         condition: service_completed_successfully
     networks: [ pingerus-net ]
     ports:
@@ -242,6 +258,8 @@ services:
         condition: service_started
       migrator:
         condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
     networks: [ pingerus-net ]
     ports:
       - "8084:8084"
@@ -251,3 +269,22 @@ services:
       timeout: 3s
       retries: 10
     restart: unless-stopped
+
+  # other
+  mailhog:
+    image: mailhog/mailhog:latest
+    networks: [ pingerus-net ]
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  http-echo:
+    image: mendhak/http-https-echo:32
+    networks: [ pingerus-net ]
+    environment:
+      - HTTP_PORT=80
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:80/" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20

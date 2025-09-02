@@ -25,7 +25,7 @@ type OTel struct {
 	TracerProvider *sdktrace.TracerProvider
 }
 
-func SetupOTel(ctx context.Context, cfg OTELConfig) (*OTel, error) {
+func SetupOTel(ctx context.Context, cfg *OTELConfig) (*OTel, error) {
 	if !cfg.Enable {
 		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 			propagation.TraceContext{}, propagation.Baggage{},

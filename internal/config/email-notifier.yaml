@@ -30,4 +30,6 @@ otel:
   service_name: "email-notifier"
   sample_ratio: 0.1
 
-log_level: "debug"
+log:
+  level: "debug"
+  pretty: false

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"github.com/NordCoder/Pingerus/internal/services/scheduler"
 	"github.com/NordCoder/Pingerus/internal/services/scheduler/repo"
-	"net/http"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -20,79 +20,70 @@ import (
 )
 
 func main() {
-	cfg, err := config.Load("../config/scheduler.yaml")
+	// init
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	cfg, err := config.Load("../config/scheduler.yaml") // todo path to config to config??
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
-	logCfg := zap.NewProductionConfig()
-	if cfg.LogLevel == "debug" {
-		logCfg = zap.NewDevelopmentConfig()
+	// logger
+	l, err := obs.NewLogger(cfg.Log.AsLoggerConfig())
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	log, _ := logCfg.Build()
-	defer func() { _ = log.Sync() }()
-	log = log.With(zap.String("service", "scheduler"))
-
-	ctx := context.Background()
-	otelCloser, err := obs.SetupOTel(ctx, obs.OTELConfig{
-		Enable:      cfg.OTEL.Enable,
-		Endpoint:    cfg.OTEL.OTLPEndpoint,
-		ServiceName: cfg.OTEL.ServiceName,
-		SampleRatio: cfg.OTEL.SampleRatio,
-	})
-
+	// otel
+	otelCloser, err := obs.SetupOTel(ctx, cfg.OTEL.AsOTELConfig())
 	if err != nil {
-		log.Fatal("otel init", zap.Error(err))
+		l.Fatal("otel init", zap.Error(err))
 	}
 	defer func() { err = otelCloser.Shutdown(context.Background()) }()
 
+	// db
 	db, err := pg.NewDB(ctx, cfg.DB)
 	if err != nil {
 		log.Fatal("db connect", zap.Error(err))
 	}
 	defer db.Close()
 
-	checkRepo := pg.NewCheckRepo(db)
-
-	kafkaProd := kafkaRepo.NewProducer(cfg.Kafka.Brokers, cfg.Kafka.Topic)
+	// kafka
+	kafkaProd := kafkaRepo.NewProducer(cfg.Kafka.Brokers, cfg.Kafka.Topic) // todo bootstrap
 	publisher := kafkaRepo.NewCheckEventsKafka(kafkaProd)
 	defer func() { _ = kafkaProd.Close() }()
 
-	ms := obs.CreateMetricsServer(cfg.Sched.MetricsAddr, func(ctx context.Context) error {
+	// run metrics server
+	ms := obs.BootstrapMetricsServer(cfg.Sched.MetricsAddr, func(ctx context.Context) error {
 		hctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 		defer cancel()
 		return db.Pool.Ping(hctx)
-	})
-	go func() {
-		log.Info("metrics listening", zap.String("addr", cfg.Sched.MetricsAddr))
-		if err := ms.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Error("metrics server error", zap.Error(err))
-		}
-	}()
+	}, l)
 
+	// wiring
+	checkRepo := pg.NewCheckRepo(db)
 	uc := scheduler.NewUC(
 		repo.CheckRepo{R: checkRepo},
 		repo.Events{P: publisher},
 	)
-	runner := scheduler.New(log, uc, &cfg.Sched)
+	runner := scheduler.New(l, uc, &cfg.Sched)
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
+	// run
 	errCh := make(chan error, 1)
 	go func() { errCh <- runner.Run(ctx) }()
 
+	// loop
 	select {
 	case <-ctx.Done():
 	case err = <-errCh:
 		if err != nil && !errors.Is(err, context.Canceled) {
-			log.Error("runner error", zap.Error(err))
+			l.Error("runner error", zap.Error(err))
 		}
 	}
 
+	// graceful shutdown
 	shCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	_ = ms.Shutdown(shCtx)
-	log.Info("bye")
+	l.Info("bye")
 }

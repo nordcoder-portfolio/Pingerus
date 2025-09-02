@@ -13,7 +13,7 @@ type LogConfig struct {
 	Ver    string
 }
 
-func NewLogger(c LogConfig) (*zap.Logger, error) {
+func NewLogger(c *LogConfig) (*zap.Logger, error) {
 	var cfg zap.Config
 	if c.Pretty {
 		cfg = zap.NewDevelopmentConfig()

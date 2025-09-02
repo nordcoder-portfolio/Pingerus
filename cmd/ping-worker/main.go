@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"github.com/NordCoder/Pingerus/internal/obs/retry"
-	outbox2 "github.com/NordCoder/Pingerus/internal/outbox"
+	"github.com/NordCoder/Pingerus/internal/outbox"
 	pingworker "github.com/NordCoder/Pingerus/internal/services/ping-worker"
-	"net/http"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -25,62 +25,13 @@ type systemClock struct{}
 
 func (systemClock) Now() time.Time { return time.Now().UTC() }
 
-func main() {
-	cfg, err := config.Load("../config/ping-worker.yaml")
-	if err != nil {
-		panic(err)
-	}
-
-	logCfg := zap.NewProductionConfig()
-	if cfg.LogLevel == "debug" {
-		logCfg = zap.NewDevelopmentConfig()
-	}
-	log, _ := logCfg.Build()
-	defer func() { _ = log.Sync() }()
-	log = log.With(zap.String("service", "ping-worker"))
-
-	root := context.Background()
-	otelCloser, err := obs.SetupOTel(root, obs.OTELConfig{
-		Enable:      cfg.OTEL.Enable,
-		Endpoint:    cfg.OTEL.OTLPEndpoint,
-		ServiceName: cfg.OTEL.ServiceName,
-		SampleRatio: cfg.OTEL.SampleRatio,
-	})
-	if err != nil {
-		log.Fatal("otel init", zap.Error(err))
-	}
-	defer func() { _ = otelCloser.Shutdown(context.Background()) }()
-
-	db, err := pg.NewDB(root, cfg.DB)
-	if err != nil {
-		log.Fatal("db connect", zap.Error(err))
-	}
-	defer db.Close()
-
-	checks := pg.NewCheckRepo(db)
-	runs := pg.NewRunRepo(db)
-
-	_ = kafka.EnsureTopic(root, cfg.In.Brokers, kafka.TopicSpec{
-		Name:              cfg.In.Topic,
-		NumPartitions:     1,
-		ReplicationFactor: 1,
-		MaxWait:           5 * time.Second,
-	}, log)
-
-	cons := kafka.NewConsumer(cfg.In.Brokers, cfg.In.GroupID, cfg.In.Topic)
-	defer func() { _ = cons.Close() }()
-
-	prod := kafka.NewProducer(cfg.Out.Brokers, cfg.Out.Topic).WithLogger(log)
-	defer func() { _ = prod.Close() }()
-
-	events := kafka.NewCheckEventsKafka(prod)
-
+func wire(cfg *config.Config, db *pg.DB, events *kafka.CheckEventsKafka, cons *kafka.Consumer, l *zap.Logger) (*outbox.Runner, *pingworker.Controller) {
 	outboxRepo := pg.NewOutboxRepo(db)
-	transactor := pg.NewTransactor(db, log)
+	transactor := pg.NewTransactor(db, l)
 
-	dispatch := outbox2.MakeGlobalOutboxHandler(events, retry.DefaultKafkaPolicy(log))
-	outboxRunner := outbox2.NewOutboxRunner( // todo config
-		log,
+	dispatch := outbox.MakeGlobalOutboxHandler(events, retry.DefaultKafkaPolicy(l))
+	outboxRunner := outbox.NewOutboxRunner( // todo config
+		l,
 		outboxRepo,
 		dispatch,
 		20,
@@ -88,24 +39,15 @@ func main() {
 		2*time.Second,
 		30*time.Second)
 
+	checks := pg.NewCheckRepo(db)
+	runs := pg.NewRunRepo(db)
+
 	httpc := pingworker.New(config.HTTPPing{
 		Timeout:         cfg.HTTP.Timeout,
 		UserAgent:       cfg.HTTP.UserAgent,
 		FollowRedirects: cfg.HTTP.FollowRedirects,
 		VerifyTLS:       cfg.HTTP.VerifyTLS,
 	})
-
-	ms := obs.CreateMetricsServer(cfg.Server.MetricsAddr, func(ctx context.Context) error {
-		hctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
-		defer cancel()
-		return db.Pool.Ping(hctx)
-	})
-	go func() {
-		log.Info("metrics listening", zap.String("addr", cfg.Server.MetricsAddr))
-		if err := ms.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Error("metrics server error", zap.Error(err))
-		}
-	}()
 
 	uc := &pingworker.Handler{
 		Checks:     workerrepo.CheckRepo{R: checks},
@@ -117,26 +59,74 @@ func main() {
 		HTTP:       pingworker.HTTPPing{Client: httpc, UserAgent: cfg.HTTP.UserAgent},
 	}
 
-	ctrl := &pingworker.Controller{Log: log, Sub: cons, UC: uc}
+	return outboxRunner, &pingworker.Controller{Log: l, Sub: cons, UC: uc}
+}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+func main() {
+	// init
+	root, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	cfg, err := config.Load("../config/ping-worker.yaml")
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	outboxRunner.Start(ctx)
+	// logger
+	l, err := obs.NewLogger(cfg.Log.AsLoggerConfig())
+	if err != nil {
+		log.Fatal(err)
+	}
 
+	// otel
+	otelCloser, err := obs.SetupOTel(root, cfg.OTEL.AsOTELConfig())
+	if err != nil {
+		l.Fatal("otel init", zap.Error(err))
+	}
+	defer func() { _ = otelCloser.Shutdown(context.Background()) }()
+
+	// db
+	db, err := pg.NewDB(root, cfg.DB)
+	if err != nil {
+		l.Fatal("db connect", zap.Error(err))
+	}
+	defer db.Close()
+
+	// metrics
+	ms := obs.BootstrapMetricsServer(cfg.Server.MetricsAddr, func(ctx context.Context) error {
+		hctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+		defer cancel()
+		return db.Pool.Ping(hctx)
+	}, l)
+
+	// kafka
+	cons := kafka.BootstrapConsumer(root, cfg.In.AsConsumerConfig(), l).WithLogger(l)
+	defer func() { _ = cons.Close() }()
+
+	prod := kafka.NewProducer(cfg.Out.Brokers, cfg.Out.Topic).WithLogger(l) // todo make bootstrap
+	defer func() { _ = prod.Close() }()
+
+	events := kafka.NewCheckEventsKafka(prod)
+
+	// wiring
+	outboxRunner, ctrl := wire(cfg, db, events, cons, l)
+
+	// start
+	outboxRunner.Start(root)
 	errCh := make(chan error, 1)
-	go func() { errCh <- ctrl.Run(ctx) }()
+	go func() { errCh <- ctrl.Run(root) }()
 
+	// loop
 	select {
-	case <-ctx.Done():
+	case <-root.Done():
 	case err = <-errCh:
 		if err != nil && !errors.Is(err, context.Canceled) {
-			log.Error("controller error", zap.Error(err))
+			l.Error("controller error", zap.Error(err))
 		}
 	}
 
+	// graceful metrics server shutdown
 	shCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	_ = ms.Shutdown(shCtx)
-	log.Info("bye")
+	l.Info("bye")
 }

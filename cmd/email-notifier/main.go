@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -42,13 +43,18 @@ func wiring(db *pg.DB, cfg *config.Config, cons *kafka.Consumer, l *zap.Logger) 
 
 func main() {
 	// init
+	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	cfg, err := config.Load("../config/email-notifier.yaml")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	// logger
 	l, err := obs.NewLogger(cfg.Log.AsLoggerConfig())
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	l.Info("starting email-notifier",
 		zap.Any("kafka_in", cfg.In),
@@ -57,7 +63,6 @@ func main() {
 	)
 
 	// otel
-	rootCtx := context.Background()
 	otelCloser, err := obs.SetupOTel(rootCtx, cfg.OTEL.AsOTELConfig())
 	if err != nil {
 		l.Warn("otel init", zap.Error(err))
@@ -72,15 +77,6 @@ func main() {
 	defer db.Close()
 	l.Info("db connected")
 
-	// kafka
-	cons := kafka.BootstrapConsumer(rootCtx, cfg.In.AsConsumerConfig(), l)
-	defer func() { _ = cons.Close() }()
-	l.Info("kafka consumer initialized",
-		zap.Strings("brokers", cfg.In.Brokers),
-		zap.String("group_id", cfg.In.GroupID),
-		zap.String("topic", cfg.In.Topic),
-	)
-
 	// metrics
 	ms := obs.BootstrapMetricsServer(cfg.Server.MetricsAddr, func(ctx context.Context) error {
 		hctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
@@ -88,20 +84,27 @@ func main() {
 		return db.Pool.Ping(hctx)
 	}, l)
 
+	// kafka
+	cons := kafka.BootstrapConsumer(rootCtx, cfg.In.AsConsumerConfig(), l).WithLogger(l)
+	defer func() { _ = cons.Close() }()
+	l.Info("kafka consumer initialized",
+		zap.Strings("brokers", cfg.In.Brokers),
+		zap.String("group_id", cfg.In.GroupID),
+		zap.String("topic", cfg.In.Topic),
+	)
+
 	// start
 	ctrl := wiring(db, cfg, cons, l)
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	errCh := make(chan error, 1)
 	go func() {
 		l.Info("controller starting")
-		errCh <- ctrl.Run(ctx)
+		errCh <- ctrl.Run(rootCtx)
 	}()
 
 	// main loop
 	var runErr error
 	select {
-	case <-ctx.Done():
+	case <-rootCtx.Done():
 		l.Info("shutdown signal")
 	case runErr = <-errCh:
 		if runErr != nil && !errors.Is(runErr, context.Canceled) {

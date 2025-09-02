@@ -1,6 +1,7 @@
 package api_gateway_config
 
 import (
+	"github.com/NordCoder/Pingerus/internal/obs"
 	"time"
 
 	pg "github.com/NordCoder/Pingerus/internal/repository/postgres"
@@ -28,9 +29,28 @@ type OTEL struct {
 	SampleRatio  float64 `mapstructure:"sample_ratio"`
 }
 
+func (oc *OTEL) AsOTELConfig() *obs.OTELConfig {
+	return &obs.OTELConfig{
+		Enable:      oc.Enable,
+		Endpoint:    oc.OTLPEndpoint,
+		ServiceName: oc.ServiceName,
+		SampleRatio: oc.SampleRatio,
+	}
+}
+
 type Log struct {
 	Level  string `mapstructure:"level"`
 	Pretty bool   `mapstructure:"pretty"`
+}
+
+func (lc *Log) AsLoggerConfig() *obs.LogConfig {
+	return &obs.LogConfig{
+		Level:  lc.Level,
+		Pretty: lc.Pretty,
+		App:    "pingerus/api-gateway",
+		Env:    "",
+		Ver:    "",
+	}
 }
 
 type Auth struct {
