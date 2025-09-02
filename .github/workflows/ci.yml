@@ -27,10 +27,18 @@ env:
   GO_VERSION: "1.24"
 
 jobs:
-  bootstrap-cache:
+  set-vars:
     runs-on: ubuntu-latest
-    env:
-      GOBIN_CACHE_PREFIX: ${{ runner.os }}-gobin-${{ hashFiles('**/scripts/bootstrap_proto.sh') }}-${{ hashFiles('**/go.mod') }}-
+    outputs:
+      gobin_prefix: ${{ steps.vars.outputs.gobin_prefix }}
+    steps:
+      - id: vars
+        run: |
+          echo "gobin_prefix=${{ runner.os }}-gobin-${{ hashFiles('**/scripts/bootstrap_proto.sh') }}-${{ hashFiles('**/go.mod') }}-" >> "$GITHUB_OUTPUT"
+
+  bootstrap-cache:
+    needs: [set-vars]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -43,9 +51,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ~/go/bin
-          key: ${{ env.GOBIN_CACHE_PREFIX }}${{ github.run_id }}
+          key: ${{ needs.set-vars.outputs.gobin_prefix }}${{ github.run_id }}
           restore-keys: |
-            ${{ env.GOBIN_CACHE_PREFIX }}
+            ${{ needs.set-vars.outputs.gobin_prefix }}
 
       - uses: arduino/setup-protoc@v3
         with:
@@ -60,13 +68,11 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ~/go/bin
-          key: ${{ env.GOBIN_CACHE_PREFIX }}${{ github.run_id }}
+          key: ${{ needs.set-vars.outputs.gobin_prefix }}${{ github.run_id }}
 
   gen:
-    needs: [bootstrap-cache]
+    needs: [bootstrap-cache, set-vars]
     runs-on: ubuntu-latest
-    env:
-      GOBIN_CACHE_PREFIX: ${{ runner.os }}-gobin-${{ hashFiles('**/scripts/bootstrap_proto.sh') }}-${{ hashFiles('**/go.mod') }}-
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -80,12 +86,16 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ~/go/bin
-          key: ${{ env.GOBIN_CACHE_PREFIX }}${{ github.run_id }}
+          key: ${{ needs.set-vars.outputs.gobin_prefix }}${{ github.run_id }}
           restore-keys: |
-            ${{ env.GOBIN_CACHE_PREFIX }}
+            ${{ needs.set-vars.outputs.gobin_prefix }}
+
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate protos (once)
-        run: make generate
+        run: make -o bootstrap generate
 
       - name: Upload generated artifacts
         uses: actions/upload-artifact@v4
@@ -103,7 +113,6 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
@@ -127,7 +136,6 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
@@ -152,7 +160,6 @@ jobs:
         target: [en, pw, ag]
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
@@ -179,7 +186,6 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
