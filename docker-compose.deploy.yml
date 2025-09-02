@@ -7,8 +7,21 @@ volumes:
   loki-data:
   tempo-data:
 
-
+# todo don't forget about changing deploy file
 services:
+  kafka-init:
+    build:
+      context: .
+      dockerfile: cmd/kafka-init/Dockerfile
+    environment:
+      KAFKA_BROKER: "kafka:9092"
+      KAFKA_TOPICS: "status-change,check-request"
+    networks: [ pingerus-net ]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: "no"
+
   frontend:
     image: ghcr.io/nordcoder-portfolio/pingerus/frontend:${TAG}
     build:
@@ -16,7 +29,7 @@ services:
       dockerfile: Dockerfile
     environment:
       API_BASE:
-#    depends_on:
+#    depends_on: todo fix
 #      api-gateway:
 #        condition: service_healthy
     networks: [ pingerus-net ]
@@ -95,6 +108,7 @@ services:
       db: { condition: service_healthy }
       kafka: { condition: service_started }
       migrator: { condition: service_completed_successfully }
+      kafka-init: { condition: service_completed_successfully }
     ports: [ "8080:8080","9090:9090" ]
     healthcheck:
       test: [ "CMD", "wget", "-qO-", "http://localhost:8080/healthz" ]
@@ -110,6 +124,7 @@ services:
       db: { condition: service_healthy }
       kafka: { condition: service_started }
       migrator: { condition: service_completed_successfully }
+      kafka-init: { condition: service_completed_successfully }
     ports: [ "8082:8082" ]
     healthcheck:
       test: [ "CMD", "wget", "-qO-", "http://localhost:8082/healthz" ]
@@ -125,6 +140,7 @@ services:
       db: { condition: service_healthy }
       kafka: { condition: service_started }
       migrator: { condition: service_completed_successfully }
+      kafka-init: { condition: service_completed_successfully }
     ports: [ "8083:8083" ]
     healthcheck:
       test: [ "CMD", "wget", "-qO-", "http://localhost:8083/healthz" ]
@@ -141,6 +157,7 @@ services:
       kafka: { condition: service_started }
       mailhog: { condition: service_started }
       migrator: { condition: service_completed_successfully }
+      kafka-init: { condition: service_completed_successfully }
     ports: [ "8084:8084" ]
     healthcheck:
       test: [ "CMD", "wget", "-qO-", "http://localhost:8084/healthz" ]
