@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"github.com/NordCoder/Pingerus/internal/obs"
+	pg "github.com/NordCoder/Pingerus/internal/repository/postgres"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,33 +17,39 @@ import (
 )
 
 func main() {
+	// init
 	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// cfg
 	cfg, err := config.Load("../config/api-gateway.yaml")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
-	logger, err := initLogger(cfg)
+	// logger
+	logger, err := obs.NewLogger(cfg.Log.AsLoggerConfig())
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	defer func() { _ = logger.Sync() }()
 	logger.Info("starting api-gateway", zap.String("env", cfg.App.Env), zap.String("ver", cfg.App.Version))
 
-	otelShutdown, err := initOTel(rootCtx, cfg, logger)
+	// otel
+	closer, err := obs.SetupOTel(rootCtx, cfg.OTEL.AsOTELConfig())
 	if err != nil {
 		logger.Fatal("otel init", zap.Error(err))
 	}
-	defer func() { _ = otelShutdown(rootCtx) }()
+	defer func() { _ = closer.Shutdown(rootCtx) }()
 
-	db, err := initDB(rootCtx, cfg, logger)
+	// db
+	db, err := pg.NewDB(rootCtx, cfg.DB)
 	if err != nil {
 		logger.Fatal("db connect", zap.Error(err))
 	}
 	defer db.Close()
 
+	// grpc
 	grpcServer, grpcLn, grpcMetrics, err := buildGRPCServer(cfg, logger, db)
 	if err != nil {
 		logger.Fatal("build grpc", zap.Error(err))
@@ -49,6 +58,7 @@ func main() {
 	grpcErrCh := make(chan error, 1)
 	go func() { grpcErrCh <- serveGRPC(grpcServer, grpcLn, cfg, logger) }()
 
+	// http
 	httpSrv, err := buildHTTPServer(rootCtx, cfg, logger, db, grpcMetrics)
 	if err != nil {
 		logger.Fatal("build http", zap.Error(err))
@@ -57,6 +67,7 @@ func main() {
 	httpErrCh := make(chan error, 1)
 	go func() { httpErrCh <- serveHTTP(httpSrv, cfg, logger) }()
 
+	// runner
 	var runErr error
 	select {
 	case <-rootCtx.Done():
@@ -71,6 +82,7 @@ func main() {
 		}
 	}
 
+	// graceful shutdown
 	shCtx, cancel := context.WithTimeout(context.Background(), cfg.Server.GracefulTimeout)
 	defer cancel()
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	http2 "github.com/NordCoder/Pingerus/cmd/api-gateway/http"
 	pb "github.com/NordCoder/Pingerus/generated/v1"
 	"github.com/NordCoder/Pingerus/internal/obs"
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
@@ -54,7 +55,7 @@ func buildHTTPServer(ctx context.Context, cfg *config.Config, logger *zap.Logger
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	handler := cors([]string{"http://frontend:80"})(root)
+	handler := http2.cors([]string{"http://frontend:80"})(root)
 
 	httpSrv := &http.Server{
 		Addr:              cfg.Server.HTTPAddr,

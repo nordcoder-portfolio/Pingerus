@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -23,109 +22,96 @@ type systemClock struct{}
 
 func (systemClock) Now() time.Time { return time.Now().UTC() }
 
-func main() {
-	cfg, err := config.Load("../config/email-notifier.yaml")
-	if err != nil {
-		panic(err)
-	}
-
-	logCfg := zap.NewProductionConfig()
-	if cfg.LogLevel == "debug" {
-		logCfg = zap.NewDevelopmentConfig()
-	}
-	log, _ := logCfg.Build()
-	defer func() { _ = log.Sync() }()
-	log = log.With(zap.String("service", "email-notifier"))
-
-	log.Info("starting email-notifier",
-		zap.Any("kafka_in", cfg.In),
-		zap.String("metrics_addr", cfg.Server.MetricsAddr),
-		zap.String("smtp_addr", cfg.SMTP.Addr),
-	)
-
-	rootCtx := context.Background()
-	otelCloser, err := obs.SetupOTel(rootCtx, obs.OTELConfig{
-		Enable:      cfg.OTEL.Enable,
-		Endpoint:    cfg.OTEL.OTLPEndpoint,
-		ServiceName: cfg.OTEL.ServiceName,
-		SampleRatio: cfg.OTEL.SampleRatio,
-	})
-	if err != nil {
-		log.Warn("otel init", zap.Error(err))
-	}
-	defer func() { _ = otelCloser.Shutdown(context.Background()) }()
-
-	db, err := pg.NewDB(rootCtx, cfg.DB)
-	if err != nil {
-		log.Fatal("db connect", zap.Error(err))
-	}
-	defer db.Close()
-	log.Info("db connected")
-
+func wiring(db *pg.DB, cfg *config.Config, cons *kafka.Consumer, l *zap.Logger) *notifier.Controller {
 	checks := pg.NewCheckRepo(db)
 	users := pg.NewUserRepo(db)
 	notifs := pg.NewNotificationRepo(db)
+	mailer := notifier.New(cfg.SMTP).WithLogger(l)
 
-	_ = kafka.EnsureTopic(rootCtx, cfg.In.Brokers, kafka.TopicSpec{
-		Name:              cfg.In.Topic,
-		NumPartitions:     1,
-		ReplicationFactor: 1,
-		MaxWait:           5 * time.Second,
-	}, log)
-
-	cons := kafka.NewConsumer(cfg.In.Brokers, cfg.In.GroupID, cfg.In.Topic).WithLogger(log)
-	defer func() { _ = cons.Close() }()
-	log.Info("kafka consumer initialized",
-		zap.Strings("brokers", cfg.In.Brokers),
-		zap.String("group_id", cfg.In.GroupID),
-		zap.String("topic", cfg.In.Topic),
-	)
-
-	ms := obs.CreateMetricsServer(cfg.Server.MetricsAddr, func(ctx context.Context) error {
-		hctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
-		defer cancel()
-		return db.Pool.Ping(hctx)
-	})
-	go func() {
-		log.Info("metrics listening", zap.String("addr", cfg.Server.MetricsAddr))
-		if err := ms.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Error("metrics server error", zap.Error(err))
-		}
-	}()
-
-	mailer := notifier.New(cfg.SMTP).WithLogger(log)
 	uc := &notifier.Handler{
 		Checks: repo.CheckReader{R: checks},
 		Users:  repo.UserReader{R: users},
 		Store:  repo.NotificationRepo{R: notifs},
 		Out:    mailer,
 		Clock:  systemClock{},
-		Log:    log,
+		Log:    l,
 	}
 
-	ctrl := &notifier.Controller{Log: log, Sub: cons, UC: uc}
+	return &notifier.Controller{Log: l, Sub: cons, UC: uc}
+}
 
+func main() {
+	// init
+	cfg, err := config.Load("../config/email-notifier.yaml")
+	if err != nil {
+		panic(err)
+	}
+
+	// logger
+	l, err := obs.NewLogger(cfg.Log.AsLoggerConfig())
+
+	l.Info("starting email-notifier",
+		zap.Any("kafka_in", cfg.In),
+		zap.String("metrics_addr", cfg.Server.MetricsAddr),
+		zap.String("smtp_addr", cfg.SMTP.Addr),
+	)
+
+	// otel
+	rootCtx := context.Background()
+	otelCloser, err := obs.SetupOTel(rootCtx, cfg.OTEL.AsOTELConfig())
+	if err != nil {
+		l.Warn("otel init", zap.Error(err))
+	}
+	defer func() { _ = otelCloser.Shutdown(context.Background()) }()
+
+	// db
+	db, err := pg.NewDB(rootCtx, cfg.DB)
+	if err != nil {
+		l.Fatal("db connect", zap.Error(err))
+	}
+	defer db.Close()
+	l.Info("db connected")
+
+	// kafka
+	cons := kafka.BootstrapConsumer(rootCtx, cfg.In.AsConsumerConfig(), l)
+	defer func() { _ = cons.Close() }()
+	l.Info("kafka consumer initialized",
+		zap.Strings("brokers", cfg.In.Brokers),
+		zap.String("group_id", cfg.In.GroupID),
+		zap.String("topic", cfg.In.Topic),
+	)
+
+	// metrics
+	ms := obs.BootstrapMetricsServer(cfg.Server.MetricsAddr, func(ctx context.Context) error {
+		hctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+		defer cancel()
+		return db.Pool.Ping(hctx)
+	}, l)
+
+	// start
+	ctrl := wiring(db, cfg, cons, l)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-
 	errCh := make(chan error, 1)
 	go func() {
-		log.Info("controller starting")
+		l.Info("controller starting")
 		errCh <- ctrl.Run(ctx)
 	}()
 
+	// main loop
 	var runErr error
 	select {
 	case <-ctx.Done():
-		log.Info("shutdown signal")
+		l.Info("shutdown signal")
 	case runErr = <-errCh:
 		if runErr != nil && !errors.Is(runErr, context.Canceled) {
-			log.Error("controller error", zap.Error(runErr))
+			l.Error("controller error", zap.Error(runErr))
 		}
 	}
 
+	// graceful metrics server shutdown
 	shCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	_ = ms.Shutdown(shCtx)
-	log.Info("bye")
+	l.Info("bye")
 }
