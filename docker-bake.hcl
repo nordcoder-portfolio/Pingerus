@@ -13,7 +13,8 @@ target "migrator" {
 
 target "kafka-init" {
   inherits   = ["base"]
-  dockerfile = "cmd/kafka-init/Dockerfile"}
+  dockerfile = "cmd/kafka-init/Dockerfile"
+}
 
 target "api-gateway" {
   inherits   = ["base"]
