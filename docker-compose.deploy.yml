@@ -10,6 +10,7 @@ volumes:
 # todo don't forget about changing deploy file
 services:
   kafka-init:
+    image: ghcr.io/nordcoder-portfolio/pingerus/kafka-init:${TAG}
     build:
       context: .
       dockerfile: cmd/kafka-init/Dockerfile

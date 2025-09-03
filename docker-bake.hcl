@@ -1,5 +1,5 @@
 group "default" {
-  targets = ["migrator", "api-gateway", "scheduler", "ping-worker", "email-notifier", "frontend"]
+  targets = ["migrator", "kafka-init", "api-gateway", "scheduler", "ping-worker", "email-notifier", "frontend"]
 }
 
 target "base" {
@@ -10,6 +10,10 @@ target "migrator" {
   inherits   = ["base"]
   dockerfile = "cmd/migrator/Dockerfile"
 }
+
+target "kafka-init" {
+  inherits   = ["base"]
+  dockerfile = "cmd/kafka-init/Dockerfile"}
 
 target "api-gateway" {
   inherits   = ["base"]
